@@ -4,6 +4,7 @@ from os.path import basename, join
 from urlparse import urlparse
 import logging
 from flexget.plugin import register_plugin, priority
+from time import strptime
 
 log = logging.getLogger('batoto')
 
@@ -38,7 +39,15 @@ class Batoto(object):
 			if urlparse(url)[2].startswith('/comic/_/comics/'):
 				log.verbose('url looks like a series page. Getting most recent upload')
 				soup = self.makesoup(url)
-				url = soup.find('table', 'chapters_list').find('tr', 'row').find('a')['href']
+				rows = soup.find('table', 'chapters_list').findAll('tr','row')
+				newesttime = None
+				newestchapter = None
+				for row in rows:
+				    chaptertime = strptime(row.findAll('td')[-1].text, '%d %B %Y - %H:%M %p')
+				    if chaptertime > newesttime:
+				    	newesttime = chaptertime
+				    	newestchapter = row
+				url = newestchapter.find('a')['href']
 				log.debug('Got url %s' % url)
 
 			if not urlparse(url)[2].startswith('/read/'):
