@@ -10,7 +10,14 @@ log = logging.getLogger('batoto')
 
 class Batoto(object):
 
-	schema = {'title': 'no options', 'type': 'boolean', 'enum': [True]}
+	schema = {'oneOf':[
+				{'title': 'no options', 'type': 'boolean', 'enum': [True]},
+	            {'title': 'options',
+	                'type': 'object',
+                	'properties': {
+                    'language': {'type': 'string'}
+                    }
+				}]}
 
 	def makesoup(self, url):
 		r = requests.get(url)
@@ -20,6 +27,12 @@ class Batoto(object):
 		return BeautifulSoup(r.text)
 
 	def on_task_metainfo(self,task,config):
+		if isinstance(config, bool): config = {}
+		#Should language default to English or None? Unsure. Best option would be get from system locale.
+		#self.language = config.get('language', 'english')
+		self.language = config.get('language')
+		if isinstance(self.language, basestring): self.language = self.language.title()
+		log.debug('Language set to %s', self.language)
 		for entry in task.entries:
 			if entry.get('title'): entry['title'] = entry.get('title').replace('Read Online','').strip()
 			entry['description'] = entry.get('title')
@@ -43,18 +56,21 @@ class Batoto(object):
 				newesttime = None
 				newestchapter = None
 				for row in rows:
+				    if self.language and not 'lang_' + self.language in row['class'].split(' '): continue
 				    chaptertime = strptime(row.findAll('td')[-1].text, '%d %B %Y - %H:%M %p')
 				    if chaptertime > newesttime:
 				    	newesttime = chaptertime
 				    	newestchapter = row
+				else: entry.fail('Unable to find any chapters matching language %s', self.lang)
 				url = newestchapter.find('a')['href']
 				log.debug('Got url %s' % url)
 
-			if not urlparse(url)[2].startswith('/read/'):
-				entry.fail('url is not a chapter page.')
+			if not urlparse(url)[2].startswith('/read/'): entry.fail('url is not a chapter page.')
 
 			soup = self.makesoup(url)
-			#try/catch errors here- if .find()'s returning None, batoto's probably doing something weird.
+			#try/catch errors here- if find()'s returning None, batoto's probably doing something weird.
+			language = basename(soup.find('select', {'name':'group_select'}).find('option', {'selected':'selected'})['value'])
+			if self.language and language != self.language: entry.fail('Chapter does not match required language.')
 			seriesname = soup.find('div', 'moderation_bar').find('a').text.replace(':','-')
 			chaptername = soup.find('select', {'name':'chapter_select'}).find('option', {'selected':'selected'}).text.replace(':','-')
 			pages = soup.find('select', {'name':'page_select'}).findAll('option')
