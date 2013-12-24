@@ -18,8 +18,7 @@ class Batoto(object):
 	            {'title': 'options',
 	                'type': 'object',
 	            	'properties': {
-	                    'language': {'type': 'string'},
-	                    'path': {'type': 'string', 'format': 'path'},
+	                    'language': {'type': 'string'}
                     }
 				}]}
 
@@ -34,17 +33,35 @@ class Batoto(object):
 		timestring = timestring.replace('[A]', '')
 		if timestring.find('ago') != -1:
 			value, unit, direction = timestring.split()
-			if value.lower() == 'a': value = 1
+			if value.lower() == 'a': value = float(1)
+			else: value = float(value)
 			if not unit.endswith('s'): unit = unit + 's'
 			if direction == 'ago': value *= -1
-			delta = timedelta(**{unit: float(value)})
+			delta = timedelta(**{unit: value})
 			actualtime = datetime.now() + delta
 		else:
 			timestring = timestring.replace('Today,', datetime.now().strftime('%d %B %Y -'))
 			actualtime = datetime.strptime(timestring, '%d %B %Y - %H:%M %p')
 		return actualtime
 
+	@priority(150)	#Needs to run before series@125
 	def on_task_metainfo(self,task,config):
+		#Add the sequence regexp needed to properly handle batoto series if they don't have any *_regexps
+		seqregexp = {'sequence_regexp': 'Ch[\.\s](\d+)'}
+		newconfig = []
+		for series in task.config.get('series'):
+			if not isinstance(series, dict): series = {series: None}
+			for seriesitem, properties in series.items():
+				if not isinstance(properties, dict): properties = {}
+				if (not properties.get('sequence_regexp') and not properties.get('date_regexp') and
+					not properties.get('id_regexp') and not properties.get('ep_regexp')):
+					#Probably neater to import & iterate through ID_TYPES
+					properties.update(seqregexp)
+				series[seriesitem] = properties
+			newconfig.append(series)
+		log.debug('Newconfig: ' + str(newconfig))
+		task.config['series'] = newconfig
+
 		if isinstance(config, bool): config = {}
 		#Should language default to English or None? Unsure. Best option would be get from system locale.
 		self.language = config.get('language', 'english')
