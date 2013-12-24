@@ -17,8 +17,9 @@ class Batoto(object):
 				{'title': 'no options', 'type': 'boolean', 'enum': [True]},
 	            {'title': 'options',
 	                'type': 'object',
-                	'properties': {
-                    'language': {'type': 'string'}
+	            	'properties': {
+	                    'language': {'type': 'string'},
+	                    'path': {'type': 'string', 'format': 'path'},
                     }
 				}]}
 
@@ -73,10 +74,10 @@ class Batoto(object):
 				seriesname = soup.find('h1', 'ipsType_pagetitle').text
 				rows = soup.find('table', 'chapters_list').findAll('tr','chapter_row')
 				targetchapter = None
-#				targettime = None
+				targettime = None
 				for row in rows:
 					if self.language and not 'lang_' + self.language in row['class'].split(' '): continue
-					parser = copy(entry.get('series_parser'))
+					parser = copy(entry.get('series_parser'))	#Probably don't need?
 					tds = row.findAll('td')
 					h = HTMLParser.HTMLParser()
 					clean_title = seriesname + ' ' + tds[0].text
@@ -84,12 +85,10 @@ class Batoto(object):
 					clean_title = re.sub('[_.,\[\]\(\):]', ' ', clean_title)
 					parser.parse(clean_title)
 					if parser.pack_identifier == entry.get('series_parser').pack_identifier:
-						targetchapter = row
-						break
-#					chaptertime = self.string_to_time(tds[-1].text)
-#					if not targettime or chaptertime > targettime:
-#						targetchapter = row
-#						targettime = chaptertime
+						chaptertime = self.string_to_time(tds[-1].text)
+						if not targettime or chaptertime > targettime:
+							targetchapter = row
+							targettime = chaptertime
 				if not targetchapter:
 					exitstring = 'Unable to find chapter %s' % entry.get('title')
 					if self.language: exitstring = exitstring + ' in %s' % self.language
