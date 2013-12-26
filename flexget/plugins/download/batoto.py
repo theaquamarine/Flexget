@@ -4,6 +4,7 @@ from os.path import basename, join
 from urlparse import urlparse
 import logging
 from flexget.plugin import register_plugin, priority, PluginError
+from flexget.utils.titles import ID_TYPES
 import HTMLParser
 from datetime import datetime, timedelta
 import re
@@ -45,9 +46,7 @@ class Batoto(object):
 			if not isinstance(series, dict): series = {series: None}
 			for seriesitem, properties in series.items():
 				if not isinstance(properties, dict): properties = {}
-				if (not properties.get('sequence_regexp') and not properties.get('date_regexp') and
-					not properties.get('id_regexp') and not properties.get('ep_regexp')):
-					#Probably neater to import & iterate through ID_TYPES
+				if not any(properties.get(id_type + '_regexp') for id_type in ID_TYPES):
 					properties.update(seqregexp)
 					log.debug('Adding sequence regex to series \'%s\'' % seriesitem)
 				series[seriesitem] = properties
