@@ -91,10 +91,13 @@ class Batoto(object):
 				rows = soup.find('table', 'chapters_list').findAll('tr','chapter_row')
 				targetchapter = None
 				targettime = None
+				targetlanguage = None
 				for row in rows:
 					if self.language:
 						classes = row['class'].split(' ')
-						if not any('lang_' + language in classes for language in self.language): continue
+						language = [language for language in self.language if 'lang_' + language in classes][0]
+						if not language: continue
+						else: chapterlanguage = self.language.index(language)
 					parser = copy(entry.get('series_parser'))	#Probably don't need?
 					tds = row.findAll('td')
 					h = HTMLParser.HTMLParser()
@@ -103,12 +106,24 @@ class Batoto(object):
 					clean_title = re.sub('[_.,\[\]\(\):]', ' ', clean_title)
 					parser.parse(clean_title)
 					if parser.pack_identifier == entry.get('series_parser').pack_identifier:
+						log.debug('Chapter match: %s' % clean_title)
 						chaptertime = self.string_to_time(tds[-1].text)
-						log.debug('Chapter conflict: %s vs %s' % (chaptertime, targettime))
-						if not targettime or chaptertime > targettime:
-							log.debug('Winner: %s' % chaptertime)
+						if self.language:
+							log.debug('Chapter language: %s, priority %s' % (language, chapterlanguage))
+							if targetlanguage is not None: log.debug('Chapter conflict: %s(%s) vs %s(%s)'
+								% (language, chapterlanguage, self.language[targetlanguage], targetlanguage))
+							if targetlanguage is None or chapterlanguage < targetlanguage:
+								#lower = listed sooner = higher priority
+								targetlanguage = chapterlanguage
+								targetchapter = row
+								targettime = chaptertime
+							continue
+						log.debug('Chapter time: %s' % chaptertime)
+						if targettime is not None: log.debug('Chapter conflict: %s vs %s' % (chaptertime, targettime))
+						if targettime is None or chaptertime > targettime:
 							targetchapter = row
 							targettime = chaptertime
+							if self.language: targetlanguage = chapterlanguage
 				if not targetchapter:
 					exitstring = 'Unable to find chapter %s' % entry.get('title')
 					if self.language: exitstring = exitstring + ' in %s' % self.language
