@@ -14,10 +14,7 @@ log = logging.getLogger('batoto')
 
 class Batoto(object):
 
-	schema = {'oneOf':[
-				{'title': 'no options', 'type': 'boolean', 'enum': [True]},
-	            {'title': 'language', 'type': 'string'}
-				]}
+	schema = {'title': 'language', 'type': 'string'}
 
 	#This applies to all unexpected behaviour. Remember while troubleshooting.
 	updatewarning = 'If this is unexpected, site may have changed. Plugin may require updating.'
@@ -53,13 +50,8 @@ class Batoto(object):
 			newconfig.append(series)
 		task.config['series'] = newconfig
 
-		#Should language default to English or Any/None? Unsure. Best option would be get from system locale.
-		if isinstance(config, bool):
-			self.language = None
-			self.language = ['English']
-		elif isinstance(config, basestring):
-			self.language = config.split(' ')
-			self.language = [language.title() for language in self.language]
+		self.language = config.split(' ')
+		self.language = [language.title() for language in self.language]
 		if 'Any' in self.language or 'None' in self.language: self.language = None
 		log.debug('Language set to %s', self.language)
 
