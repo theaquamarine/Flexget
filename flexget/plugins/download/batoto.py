@@ -3,7 +3,7 @@ from BeautifulSoup import BeautifulSoup
 from os.path import basename, join
 from urlparse import urlparse
 import logging
-from flexget.plugin import register_plugin, priority
+from flexget.plugin import register_plugin, priority, PluginError
 import HTMLParser
 from datetime import datetime, timedelta
 import re
@@ -18,12 +18,8 @@ class Batoto(object):
 	            {'title': 'language', 'type': 'string'}
 				]}
 
-	def makesoup(self, url):
-		r = requests.get(url)
-		if r.status_code != 200:
-			log.error(str(r.status_code) + ' error getting ' + str(r.url))
-			exit(1)
-		return BeautifulSoup(r.text)
+	#This applies to all unexpected behaviour. Remember while troubleshooting.
+	updatewarning = 'If this is unexpected, site may have changed. Plugin may require updating.'
 
 	def string_to_time(self, timestring):
 		timestring = timestring.replace('[A]', '')
@@ -83,21 +79,40 @@ class Batoto(object):
 				log.warning('%s url is not a batoto url, ignoring.' % entry.get('title'))
 				continue
 
+			try:
+				r = requests.get(url)
+				if r.status_code != 200: raise PluginError(str(r.status_code) + ' error getting ' + str(r.url))
+				#r.url or url? r.url can be redirect target.
+			except Exception as e:
+				entry.fail(unicode(e))
+				continue
+
 			#confirm we're on a chapter page
-			if urlparse(url)[2].startswith('/comic/_/comics/'):
+			if urlparse(r.url)[2].startswith('/comic/_/comics/'):
 				log.verbose('url looks like a series page. Getting most recent upload')
-				soup = self.makesoup(url)
-				seriesname = soup.find('h1', 'ipsType_pagetitle').text
-				rows = soup.find('table', 'chapters_list').findAll('tr','chapter_row')
+				try:
+					soup = BeautifulSoup(r.text)
+					seriesname = soup.find('h1', 'ipsType_pagetitle').text
+					rows = soup.find('table', 'chapters_list').findAll('tr','chapter_row')
+				except (AttributeError, TypeError) as e:
+					log.error('Encountered an error finding chapters on series page. Site could have been changed, ' +
+						'plugin update may be required.')
+					entry.fail(unicode('Error finding chapters.'))
+					continue
+				except Exception as e:
+					entry.fail(unicode('Error finding chapters. ') + unicode(e))
+					continue
 				targetchapter = None
 				targettime = None
 				targetlanguage = None
 				for row in rows:
 					if self.language:
 						classes = row['class'].split(' ')
-						language = [language for language in self.language if 'lang_' + language in classes][0]
+						language = [language for language in self.language if 'lang_' + language in classes]
 						if not language: continue
-						else: chapterlanguage = self.language.index(language)
+						else:
+							language = language[0]
+							chapterlanguage = self.language.index(language)
 					parser = copy(entry.get('series_parser'))	#Probably don't need?
 					tds = row.findAll('td')
 					h = HTMLParser.HTMLParser()
@@ -126,26 +141,47 @@ class Batoto(object):
 							if self.language: targetlanguage = chapterlanguage
 				if not targetchapter:
 					exitstring = 'Unable to find chapter %s' % entry.get('title')
-					if self.language: exitstring = exitstring + ' in %s' % self.language
-					entry.reject(exitstring)
+					if self.language:
+						exitstring = exitstring + ' in %s' % self.language
+						entry.reject(unicode(exitstring))
+					else:
+						entry.fail(unicode(exitstring))
+					log.debug(self.updatewarning)
 					continue
 				else:
-					url = targetchapter.find('a')['href']
-					entry['url'] = url
-					log.debug('Got url %s' % url)
+					try:
+						url = targetchapter.find('a')['href']
+						entry['url'] = url
+						log.debug('Got url %s' % url)
+						r = requests.get(url)
+						if r.status_code != 200: raise PluginError(str(r.status_code) + ' error getting ' + str(r.url))
+					except Exception as e:
+						entry.fail(unicode(e))
+						continue
 
-			if not urlparse(url)[2].startswith('/read/'):
-				entry.reject('url is not a chapter page.')
+			if not urlparse(r.url)[2].startswith('/read/'):
+				entry.fail(unicode('url is not a chapter page.'))
 				continue
 
-			soup = self.makesoup(url)
-			#try/catch errors here- if find()'s returning None, batoto's probably doing something weird.
-			language = basename(soup.find('select', {'name':'group_select'}).find('option', {'selected':'selected'})['value'])
-			if self.language and language not in self.language: entry.fail('Chapter does not match required language.')
 			h = HTMLParser.HTMLParser()
-			seriesname = h.unescape(soup.find('div', 'moderation_bar').find('a').text.replace(':','-'))
-			chaptername = h.unescape(soup.find('select', {'name':'chapter_select'}).find('option', {'selected':'selected'}).text.replace(':','-'))
-			pages = soup.find('select', {'name':'page_select'}).findAll('option')
+			try:
+				soup = BeautifulSoup(r.text)
+				language = basename(soup.find('select', {'name':'group_select'}).
+					find('option', {'selected':'selected'})['value'])
+				if self.language and language not in self.language:
+					entry.fail(unicode('Chapter does not match required language.'))
+				seriesname = h.unescape(soup.find('div', 'moderation_bar').find('a').text.replace(':','-'))
+				chaptername = h.unescape(soup.find('select', {'name':'chapter_select'}).
+					find('option', {'selected':'selected'}).text.replace(':','-'))
+				pages = soup.find('select', {'name':'page_select'}).findAll('option')
+			except (AttributeError, TypeError) as e:
+				log.error('Encountered an error finding details on chapter page. Site could have been changed, ' +
+					'plugin update may be required.')
+				entry.fail(unicode('Error finding details.'))
+				continue
+			except Exception as e:
+				entry.fail(unicode('Error finding details. ') + unicode(e))
+				continue
 			log.verbose(seriesname + ' ' + chaptername + ': ' + str(len(pages)) + ' pages')
 
 			#customization a la set would be nice here.
@@ -162,15 +198,26 @@ class Batoto(object):
 					urls.append(page['value'])
 			else:
 				log.info('Prepping pages of ' + seriesname + ' ' + chaptername + ' - This might take a while!')
-				for page in pages:
-					soup = self.makesoup(page['value'])
-					r = requests.get(soup.find(id='comic_page')['src'])
-					#soup.find(id='comic_page')['src'] can return TypeError if find(id='comic_page') has no results
-					#requests.get() can return MissingSchema if invalid url
-					urls.append(r.url)
-					filenames.append(basename(r.url).replace('img',''))
-				entry['urls'] = urls
-				entry['filenames'] = filenames
+				try:
+					for page in pages:
+						r = requests.get(page['value'])
+						if r.status_code != 200: raise PluginError(str(r.status_code) + ' error getting ' + str(r.url))
+						soup = BeautifulSoup(r.text)
+						image = requests.get(soup.find(id='comic_page')['src'])
+						if image.status_code != 200: raise PluginError(str(image.status_code) + ' error getting ' +
+							str(image.url))
+						urls.append(image.url)
+						filenames.append(basename(image.url).replace('img',''))
+					entry['urls'] = urls
+					entry['filenames'] = filenames
+				except (AttributeError, TypeError) as e:
+					log.error('Encountered an error finding page images in chapter. Site could have been changed, ' +
+						'plugin update may be required.')
+					entry.fail(unicode('Error finding page images.'))
+					continue
+				except Exception as e:
+					entry.fail(unicode('Error finding page images. ') + unicode(e))
+					continue
 			entry['download_all'] = True
 		else:
 			if not haveworked: log.error('Encountered no batoto urls.')
