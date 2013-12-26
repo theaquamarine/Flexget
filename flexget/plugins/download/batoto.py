@@ -15,12 +15,8 @@ class Batoto(object):
 
 	schema = {'oneOf':[
 				{'title': 'no options', 'type': 'boolean', 'enum': [True]},
-	            {'title': 'options',
-	                'type': 'object',
-	            	'properties': {
-	                    'language': {'type': 'string'}
-                    }
-				}]}
+	            {'title': 'language', 'type': 'string'}
+				]}
 
 	def makesoup(self, url):
 		r = requests.get(url)
@@ -57,18 +53,19 @@ class Batoto(object):
 					not properties.get('id_regexp') and not properties.get('ep_regexp')):
 					#Probably neater to import & iterate through ID_TYPES
 					properties.update(seqregexp)
+					log.debug('Adding sequence regex to series \'%s\'' % seriesitem)
 				series[seriesitem] = properties
 			newconfig.append(series)
-		log.debug('Newconfig: ' + str(newconfig))
 		task.config['series'] = newconfig
 
-		if isinstance(config, bool): config = {}
-		#Should language default to English or None? Unsure. Best option would be get from system locale.
-		self.language = config.get('language', 'english')
-		#self.language = config.get('language')
-		if isinstance(self.language, basestring): self.language = self.language.title()
-		if self.language == 'None': self.language = None
+		#Should language default to English or Any/None? Unsure. Best option would be get from system locale.
+		if isinstance(config, bool):
+			self.language = None
+			self.language = 'English'
+		elif isinstance(config, basestring): self.language = config.title()
+		if  self.language == 'Any' or self.language == 'None': self.language = None
 		log.debug('Language set to %s', self.language)
+
 		for entry in task.entries:
 			if entry.get('title'): entry['title'] = entry.get('title').replace('Read Online','').strip()
 			entry['description'] = entry.get('title')
