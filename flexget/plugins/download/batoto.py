@@ -29,7 +29,7 @@ class Batoto(object):
 		timestring = timestring.replace('[A]', '')
 		if timestring.find('ago') != -1:
 			value, unit, direction = timestring.split()
-			if value.lower() == 'a': value = float(1)
+			if value.lower() == 'a' or value.lower() == 'an': value = float(1)
 			else: value = float(value)
 			if not unit.endswith('s'): unit = unit + 's'
 			if direction == 'ago': value *= -1
@@ -61,9 +61,11 @@ class Batoto(object):
 		#Should language default to English or Any/None? Unsure. Best option would be get from system locale.
 		if isinstance(config, bool):
 			self.language = None
-			self.language = 'English'
-		elif isinstance(config, basestring): self.language = config.title()
-		if  self.language == 'Any' or self.language == 'None': self.language = None
+			self.language = ['English']
+		elif isinstance(config, basestring):
+			self.language = config.split(' ')
+			self.language = [language.title() for language in self.language]
+		if 'Any' in self.language or 'None' in self.language: self.language = None
 		log.debug('Language set to %s', self.language)
 
 		for entry in task.entries:
@@ -90,7 +92,9 @@ class Batoto(object):
 				targetchapter = None
 				targettime = None
 				for row in rows:
-					if self.language and not 'lang_' + self.language in row['class'].split(' '): continue
+					if self.language:
+						classes = row['class'].split(' ')
+						if not any('lang_' + language in classes for language in self.language): continue
 					parser = copy(entry.get('series_parser'))	#Probably don't need?
 					tds = row.findAll('td')
 					h = HTMLParser.HTMLParser()
@@ -100,7 +104,9 @@ class Batoto(object):
 					parser.parse(clean_title)
 					if parser.pack_identifier == entry.get('series_parser').pack_identifier:
 						chaptertime = self.string_to_time(tds[-1].text)
+						log.debug('Chapter conflict: %s vs %s' % (chaptertime, targettime))
 						if not targettime or chaptertime > targettime:
+							log.debug('Winner: %s' % chaptertime)
 							targetchapter = row
 							targettime = chaptertime
 				if not targetchapter:
@@ -120,7 +126,7 @@ class Batoto(object):
 			soup = self.makesoup(url)
 			#try/catch errors here- if find()'s returning None, batoto's probably doing something weird.
 			language = basename(soup.find('select', {'name':'group_select'}).find('option', {'selected':'selected'})['value'])
-			if self.language and language != self.language: entry.fail('Chapter does not match required language.')
+			if self.language and language not in self.language: entry.fail('Chapter does not match required language.')
 			h = HTMLParser.HTMLParser()
 			seriesname = h.unescape(soup.find('div', 'moderation_bar').find('a').text.replace(':','-'))
 			chaptername = h.unescape(soup.find('select', {'name':'chapter_select'}).find('option', {'selected':'selected'}).text.replace(':','-'))
