@@ -76,7 +76,7 @@ class Batoto(object):
 		for entry in task.accepted:
 			url = entry.get('url')
 			if not urlparse(url)[1].endswith('batoto.net'):
-				log.warning('%s url is not a batoto url, ignoring.' % entry.get('title'))
+				log.warning('%s URL is not a batoto URL, ignoring.' % entry.get('title'))
 				continue
 
 			try:
@@ -89,7 +89,7 @@ class Batoto(object):
 
 			#confirm we're on a chapter page
 			if urlparse(r.url)[2].startswith('/comic/_/comics/'):
-				log.verbose('url looks like a series page. Getting most recent upload')
+				log.verbose('URL looks like a series page. Attempting to get %s' % entry.get('title'))
 				try:
 					soup = BeautifulSoup(r.text)
 					seriesname = soup.find('h1', 'ipsType_pagetitle').text
@@ -160,7 +160,7 @@ class Batoto(object):
 						continue
 
 			if not urlparse(r.url)[2].startswith('/read/'):
-				entry.fail(unicode('url is not a chapter page.'))
+				entry.fail(unicode('URL is not a chapter page.'))
 				continue
 
 			h = HTMLParser.HTMLParser()
@@ -220,6 +220,6 @@ class Batoto(object):
 					continue
 			entry['download_all'] = True
 		else:
-			if not haveworked: log.error('Encountered no batoto urls.')
+			if not haveworked: log.error('Encountered no batoto URLs.')
 
 register_plugin(Batoto, 'batoto', api_ver=2)
