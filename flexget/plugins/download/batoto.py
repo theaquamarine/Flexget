@@ -35,7 +35,7 @@ class Batoto(object):
 		return actualtime
 
 	@priority(150)	#Needs to run before series@125
-	def on_task_metainfo(self,task,config):
+	def on_task_metainfo(self, task, config):
 		#Add the sequence regexp needed to properly handle batoto series if they don't have any *_regexps
 		seqregexp = {'sequence_regexp': 'Ch[\.\s](\d+)'}
 		newconfig = []
@@ -79,7 +79,7 @@ class Batoto(object):
 				entry.fail(unicode(e))
 				continue
 
-			#confirm we're on a chapter page
+			#Are we on a series page? If so, try to get chapter page.
 			if urlparse(r.url)[2].startswith('/comic/_/comics/'):
 				if entry.get('series_parser'): log.verbose('URL looks like a series page. Attempting to get %s'
 					% entry.get('title'))
@@ -102,6 +102,7 @@ class Batoto(object):
 				targettime = None
 				targetlanguage = None
 				for row in rows:
+					#Reject anything we can on language & series info
 					if self.language:
 						classes = row['class'].split(' ')
 						language = [language for language in self.language if 'lang_' + language in classes]
@@ -110,7 +111,6 @@ class Batoto(object):
 							language = language[0]
 							chapterlanguage = self.language.index(language)
 					tds = row.findAll('td')
-					chaptertime = self.string_to_time(tds[-1].text)
 					if parser:
 						clean_title = seriesname + ' ' + tds[0].text
 						clean_title = h.unescape(clean_title)
@@ -118,19 +118,24 @@ class Batoto(object):
 						parser.parse(clean_title)
 						if parser.pack_identifier == entry.get('series_parser').pack_identifier:
 							log.debug('Chapter match: %s' % clean_title)
-							if self.language:
-								log.debug('Chapter language: %s, priority %s' % (language, chapterlanguage))
-								if targetlanguage is not None: log.debug('Chapter conflict: %s(%s) vs %s(%s)'
-									% (language, chapterlanguage, self.language[targetlanguage], targetlanguage))
-								if targetlanguage is None or chapterlanguage < targetlanguage:
-									#lower = listed sooner = higher priority
-									targetlanguage = chapterlanguage
-									targetchapter = row
-									targettime = chaptertime
-									continue
 						else: continue
-						log.debug('Chapter time: %s' % chaptertime)
-						if targettime is not None: log.debug('Chapter conflict: %s vs %s' % (chaptertime, targettime))
+
+					#See if anything left is a better match than we have
+					chaptertime = self.string_to_time(tds[-1].text)
+					if self.language:
+						log.debug('Chapter language: %s, priority %s' % (language, chapterlanguage))
+						if targetlanguage is not None: log.debug('Chapter conflict: %s(%s) vs %s(%s)'
+							% (language, chapterlanguage, self.language[targetlanguage], targetlanguage))
+						if targetlanguage is None or chapterlanguage < targetlanguage:
+							#lower = listed sooner = higher priority
+							targetlanguage = chapterlanguage
+							targetchapter = row
+							targettime = chaptertime
+							continue
+						elif chapterlanguage == targetlanguage: pass
+						else: continue
+					log.debug('Chapter time: %s' % chaptertime)
+					if targettime is not None: log.debug('Chapter conflict: %s vs %s' % (chaptertime, targettime))
 					if targettime is None or chaptertime > targettime:
 						targetchapter = row
 						targettime = chaptertime
@@ -154,10 +159,12 @@ class Batoto(object):
 						entry.fail(unicode(e))
 						continue
 
+			#Are we on a chapter page?
 			if not urlparse(r.url)[2].startswith('/read/'):
 				entry.fail(unicode('URL is not a chapter page.'))
 				continue
 
+			#Get chapter pages & info
 			h = HTMLParser.HTMLParser()
 			try:
 				soup = BeautifulSoup(r.text)
@@ -187,6 +194,7 @@ class Batoto(object):
 			urls = []
 			filenames = []
 
+			#Prep pages for download
 			if task.manager.options.test:
 				log.info('Would prep pages of ' + seriesname + ' ' + chaptername)
 				for page in pages:
