@@ -1,14 +1,14 @@
-import requests
-from BeautifulSoup import BeautifulSoup
+import HTMLParser
+import re
+import logging
 from os.path import basename, join
 from urlparse import urlparse
-import logging
+from datetime import datetime, timedelta
+from copy import copy
+import requests
+from BeautifulSoup import BeautifulSoup
 from flexget.plugin import register_plugin, priority, PluginError
 from flexget.utils.titles import ID_TYPES
-import HTMLParser
-from datetime import datetime, timedelta
-import re
-from copy import copy
 
 log = logging.getLogger('batoto')
 
