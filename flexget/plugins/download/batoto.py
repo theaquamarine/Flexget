@@ -39,16 +39,17 @@ class Batoto(object):
 		#Add the sequence regexp needed to properly handle batoto series if they don't have any *_regexps
 		seqregexp = {'sequence_regexp': 'Ch[\.\s](\d+)'}
 		newconfig = []
-		for series in task.config.get('series'):
-			if not isinstance(series, dict): series = {series: None}
-			for seriesitem, properties in series.items():
-				if not isinstance(properties, dict): properties = {}
-				if not any(properties.get(id_type + '_regexp') for id_type in ID_TYPES):
-					properties.update(seqregexp)
-					log.debug('Adding sequence regex to series \'%s\'' % seriesitem)
-				series[seriesitem] = properties
-			newconfig.append(series)
-		task.config['series'] = newconfig
+		if task.config.get('series'):
+			for series in task.config.get('series'):
+				if not isinstance(series, dict): series = {series: None}
+				for seriesitem, properties in series.items():
+					if not isinstance(properties, dict): properties = {}
+					if not any(properties.get(id_type + '_regexp') for id_type in ID_TYPES):
+						properties.update(seqregexp)
+						log.debug('Adding sequence regex to series \'%s\'' % seriesitem)
+					series[seriesitem] = properties
+				newconfig.append(series)
+			task.config['series'] = newconfig
 
 		self.language = config.split(' ')
 		self.language = [language.title() for language in self.language]
@@ -80,7 +81,9 @@ class Batoto(object):
 
 			#confirm we're on a chapter page
 			if urlparse(r.url)[2].startswith('/comic/_/comics/'):
-				log.verbose('URL looks like a series page. Attempting to get %s' % entry.get('title'))
+				if entry.get('series_parser'): log.verbose('URL looks like a series page. Attempting to get %s'
+					% entry.get('title'))
+				else: log.verbose('URL looks like a series page. Attempting to get most recent chapter.')
 				try:
 					soup = BeautifulSoup(r.text)
 					seriesname = soup.find('h1', 'ipsType_pagetitle').text
@@ -93,6 +96,8 @@ class Batoto(object):
 				except Exception as e:
 					entry.fail(unicode('Error finding chapters. ') + unicode(e))
 					continue
+				parser = copy(entry.get('series_parser'))
+				h = HTMLParser.HTMLParser()
 				targetchapter = None
 				targettime = None
 				targetlanguage = None
@@ -104,39 +109,38 @@ class Batoto(object):
 						else:
 							language = language[0]
 							chapterlanguage = self.language.index(language)
-					parser = copy(entry.get('series_parser'))	#Probably don't need?
 					tds = row.findAll('td')
-					h = HTMLParser.HTMLParser()
-					clean_title = seriesname + ' ' + tds[0].text
-					clean_title = h.unescape(clean_title)
-					clean_title = re.sub('[_.,\[\]\(\):]', ' ', clean_title)
-					parser.parse(clean_title)
-					if parser.pack_identifier == entry.get('series_parser').pack_identifier:
-						log.debug('Chapter match: %s' % clean_title)
-						chaptertime = self.string_to_time(tds[-1].text)
-						if self.language:
-							log.debug('Chapter language: %s, priority %s' % (language, chapterlanguage))
-							if targetlanguage is not None: log.debug('Chapter conflict: %s(%s) vs %s(%s)'
-								% (language, chapterlanguage, self.language[targetlanguage], targetlanguage))
-							if targetlanguage is None or chapterlanguage < targetlanguage:
-								#lower = listed sooner = higher priority
-								targetlanguage = chapterlanguage
-								targetchapter = row
-								targettime = chaptertime
-							continue
+					chaptertime = self.string_to_time(tds[-1].text)
+					if parser:
+						clean_title = seriesname + ' ' + tds[0].text
+						clean_title = h.unescape(clean_title)
+						clean_title = re.sub('[_.,\[\]\(\):]', ' ', clean_title)
+						parser.parse(clean_title)
+						if parser.pack_identifier == entry.get('series_parser').pack_identifier:
+							log.debug('Chapter match: %s' % clean_title)
+							if self.language:
+								log.debug('Chapter language: %s, priority %s' % (language, chapterlanguage))
+								if targetlanguage is not None: log.debug('Chapter conflict: %s(%s) vs %s(%s)'
+									% (language, chapterlanguage, self.language[targetlanguage], targetlanguage))
+								if targetlanguage is None or chapterlanguage < targetlanguage:
+									#lower = listed sooner = higher priority
+									targetlanguage = chapterlanguage
+									targetchapter = row
+									targettime = chaptertime
+									continue
+						else: continue
 						log.debug('Chapter time: %s' % chaptertime)
 						if targettime is not None: log.debug('Chapter conflict: %s vs %s' % (chaptertime, targettime))
-						if targettime is None or chaptertime > targettime:
-							targetchapter = row
-							targettime = chaptertime
-							if self.language: targetlanguage = chapterlanguage
+					if targettime is None or chaptertime > targettime:
+						targetchapter = row
+						targettime = chaptertime
+						if self.language: targetlanguage = chapterlanguage
 				if not targetchapter:
 					exitstring = 'Unable to find chapter %s' % entry.get('title')
 					if self.language:
 						exitstring = exitstring + ' in %s' % self.language
 						entry.reject(unicode(exitstring))
-					else:
-						entry.fail(unicode(exitstring))
+					else: entry.fail(unicode(exitstring))
 					log.debug(self.updatewarning)
 					continue
 				else:
