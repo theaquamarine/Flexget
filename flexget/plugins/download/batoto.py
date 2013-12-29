@@ -13,6 +13,19 @@ from flexget.utils.titles import ID_TYPES
 log = logging.getLogger('batoto')
 
 class Batoto(object):
+	"""
+	Scrapes comics from batoto.net.
+
+	Accepts either chapter pages (from myfollows_rss) and series pages (from recent_rss).
+
+	Adds a sequence_regexp to all series which have no other *regexps to enable parsing of batoto's titles. Strips the
+	phrase 'read online' from `title` and `description`.
+
+	Sets `filename` using information from chapter page, expecting this to be used as a save directory for the chapter.
+	Page image URLs are loaded into `urls` and `filenames` for later processing, with a `download_all` flag set to
+	instruct download to download all urls in `urls` rather than stopping at first successful download as happens when
+	rss loads links into `urls`.
+	"""
 
 	schema = {'title': 'language', 'type': 'string'}
 
@@ -136,8 +149,11 @@ class Batoto(object):
 			if not haveworked: log.error('Encountered no batoto URLs.')
 
 	def get_chapter(self, entry, r):
-		"""Attempts to get a single chapter from a series page, respecting language settings. If a series parser is
-			available, will look for a chapter matching 'title'. If not, it will get the most recent upload.
+		"""
+		Attempts to get a single chapter from a series page
+
+		Respects language settings. If a series parser is available, will look for a chapter matching 'title'. If not,
+		it will get the most recent upload.
 
 		:raises: PluginWarning for errors it handles, mostly to allow caller to except PluginWarning: continue
 		"""
@@ -222,6 +238,12 @@ class Batoto(object):
 			return r
 
 	def string_to_time(self, timestring):
+		"""
+		Turns a fuzzy time ('x days ago', 'A week ago', etc) up to weeks into an absolute datetime.
+
+		:raises: TypeError if given a unit larger than weeks. Weeks is the largest unit used on the website before
+		switching to absolute time, so this should never happen.
+		"""
 		timestring = timestring.replace('[A]', '')
 		if timestring.find('ago') != -1:
 			value, unit, direction = timestring.split()
