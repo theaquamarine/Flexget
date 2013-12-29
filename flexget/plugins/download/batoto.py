@@ -42,6 +42,10 @@ class Batoto(object):
 				if not isinstance(series, dict): series = {series: None}
 				for seriesitem, properties in series.items():
 					if not isinstance(properties, dict): properties = {}
+					elif properties.get('from_group'):
+						#from_group breaks with batoto as nothing has group info at filtering.
+						del properties['from_group']
+						log.debug('Removed group requirement from series %s' % seriesitem)
 					if not any(properties.get(id_type + '_regexp') for id_type in ID_TYPES):
 						properties.update(seqregexp)
 						log.debug('Adding sequence regex to series \'%s\'' % seriesitem)
