@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from copy import copy
 import requests
 from BeautifulSoup import BeautifulSoup
-from flexget.plugin import register_plugin, priority, PluginError, PluginWarning
+from flexget import plugin
+from flexget.event import event
 from flexget.utils.titles import ID_TYPES
 
 log = logging.getLogger('batoto')
@@ -32,7 +33,7 @@ class Batoto(object):
 	#This applies to all unexpected behaviour. Remember while troubleshooting.
 	updatewarning = 'If this is unexpected, site may have changed. Plugin may require updating.'
 
-	@priority(150)	#Needs to run before series@125
+	@plugin.priority(150)	#Needs to run before series@125
 	def on_task_metainfo(self, task, config):
 		#Add the sequence regexp needed to properly handle batoto series if they don't have any *_regexps
 		seqregexp = {'sequence_regexp': 'Ch[\.\s](\d+)'}
@@ -62,7 +63,7 @@ class Batoto(object):
 			if entry.get('title'): entry['title'] = entry.get('title').replace('Read Online','').strip()
 			entry['description'] = entry.get('title')
 
-	@priority(150)	#Needs to go before download@128
+	@plugin.priority(150)	#Needs to go before download@128
 	def on_task_download(self, task, config):
 
 		haveworked = False
@@ -75,7 +76,7 @@ class Batoto(object):
 
 			try:
 				r = requests.get(url)
-				if r.status_code != 200: raise PluginError(str(r.status_code) + ' error getting ' + str(r.url))
+				if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
 				#r.url or url? r.url can be redirect target.
 			except Exception as e:
 				entry.fail(unicode(e))
@@ -84,7 +85,7 @@ class Batoto(object):
 			#Are we on a series page? If so, try to get chapter page.
 			if urlparse(r.url)[2].startswith('/comic/_/comics/'):
 				try: r = self.get_chapter(entry, r)
-				except PluginWarning: continue
+				except plugin.PluginWarning: continue
 
 			#Are we on a chapter page?
 			if not urlparse(r.url)[2].startswith('/read/'):
@@ -131,10 +132,10 @@ class Batoto(object):
 				try:
 					for page in pages:
 						r = requests.get(page['value'])
-						if r.status_code != 200: raise PluginError(str(r.status_code) + ' error getting ' + str(r.url))
+						if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
 						soup = BeautifulSoup(r.text)
 						image = requests.get(soup.find(id='comic_page')['src'])
-						if image.status_code != 200: raise PluginError(str(image.status_code) + ' error getting ' +
+						if image.status_code != 200: raise plugin.PluginError(str(image.status_code) + ' error getting ' +
 							str(image.url))
 						urls.append(image.url)
 						filenames.append(basename(image.url).replace('img',''))
@@ -173,10 +174,10 @@ class Batoto(object):
 			log.error('Encountered an error finding chapters on series page. Site could have been changed, ' +
 				'plugin update may be required.')
 			entry.fail(unicode('Error finding chapters.'))
-			raise PluginWarning('Error encountered while processing %s' % entry.get('title'))
+			raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
 		except Exception as e:
 			entry.fail(unicode('Error finding chapters. ') + unicode(e))
-			raise PluginWarning('Error encountered while processing %s' % entry.get('title'))
+			raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
 		parser = copy(entry.get('series_parser'))
 		h = HTMLParser.HTMLParser()
 		targetchapter = None
@@ -228,17 +229,17 @@ class Batoto(object):
 				entry.reject(unicode(exitstring))
 			else: entry.fail(unicode(exitstring))
 			log.debug(self.updatewarning)
-			raise PluginWarning(exitstring)
+			raise plugin.PluginWarning(exitstring)
 		else:
 			try:
 				url = targetchapter.find('a')['href']
 				entry['url'] = url
 				log.debug('Got url %s' % url)
 				r = requests.get(url)
-				if r.status_code != 200: raise PluginError(str(r.status_code) + ' error getting ' + str(r.url))
+				if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
 			except Exception as e:
 				entry.fail(unicode(e))
-				raise PluginWarning('Error encountered while processing %s' % entry.get('title'))
+				raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
 			return r
 
 	def string_to_time(self, timestring):
@@ -262,4 +263,6 @@ class Batoto(object):
 			actualtime = datetime.strptime(timestring, '%d %B %Y - %H:%M %p')
 		return actualtime
 
-register_plugin(Batoto, 'batoto', api_ver=2)
+@event('plugin.register')
+def register_plugin():
+	plugin.register(Batoto, 'batoto', api_ver=2)
