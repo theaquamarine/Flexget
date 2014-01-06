@@ -10,6 +10,7 @@ from BeautifulSoup import BeautifulSoup
 from flexget import plugin
 from flexget.event import event
 from flexget.utils.titles import ID_TYPES
+from flexget.entry import Entry
 
 log = logging.getLogger('batoto')
 
@@ -45,8 +46,10 @@ class Batoto(object):
 					if not isinstance(properties, dict): properties = {}
 					elif properties.get('from_group'):
 						#from_group breaks with batoto as nothing has group info at filtering.
-						del properties['from_group']
-						log.debug('Removed group requirement from series %s' % seriesitem)
+						#del properties['from_group']
+						#log.debug('Removed group requirement from series %s' % seriesitem)
+						log.warning(('\'from_group\' is set for series \'%s\': This will cause no batoto items to be ' +
+							'accepted for it.') % seriesitem)
 					if not any(properties.get(id_type + '_regexp') for id_type in ID_TYPES):
 						properties.update(seqregexp)
 						log.debug('Adding sequence regex to series \'%s\'' % seriesitem)
