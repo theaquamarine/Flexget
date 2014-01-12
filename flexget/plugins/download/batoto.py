@@ -67,8 +67,9 @@ class Batoto(object):
             if 'Any' in self.language or 'None' in self.language: self.language = None
         log.debug('Language set to %s', self.language)
 
-    @plugin.priority(150)   #Needs to run before series@125. Might be better in input with very low priority.
-    def on_task_metainfo(self, task, config):
+    @plugin.priority(1)
+    def on_task_input(self, task, config):
+        log.debug('Cleaning titles & descriptions')
         for entry in task.entries:
             if entry.get('title'): entry['title'] = entry.get('title').replace('Read Online','').strip()
             entry['description'] = entry.get('title')
@@ -77,12 +78,14 @@ class Batoto(object):
     def on_task_download(self, task, config):
 
         haveworked = False
+        finishedentries = []
 
         for entry in task.accepted:
             url = entry.get('url')
             if not urlparse(url)[1].endswith('batoto.net'):
                 log.warning('%s URL is not a batoto URL, ignoring.' % entry.get('title'))
                 continue
+            if urlparse(url)[1].startswith('img'): continue    #image
             try:
                 r = requests.get(url)
                 if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
@@ -119,43 +122,55 @@ class Batoto(object):
             log.verbose(seriesname + ' ' + chaptername + ': ' + str(len(pages)) + ' pages')
 
             #customization a la set would be nice here.
-            entry['filename'] = entry.get('filename', join(seriesname,chaptername))
-            log.verbose('Saving to ' + entry.get('filename'))
+            chapterdir = entry.get('filename', join(seriesname, chaptername))
+            log.verbose('Saving to ' + chapterdir)
+            #Really don't like this- requires path to be set beforehand
+            #Making path an argument for plugin doesn't really seem appropriate.
+            #way to instruct download to append something to path?
+            entry['path'] = join(entry.get('path'), chapterdir)
+            #entry['subdir'] = chapterdir   #maybe?
             haveworked = True
-
-            urls = []
-            filenames = []
 
             #Prep pages for download
             if task.manager.options.test:
                 log.info('Would prep pages of ' + seriesname + ' ' + chaptername)
-                for page in pages:
-                    urls.append(page['value'])
+                log.debug(pages)
             else:
                 log.info('Prepping pages of ' + seriesname + ' ' + chaptername + ' - This might take a while!')
+                newentries = []
                 try:
                     for page in pages:
                         r = requests.get(page['value'])
-                        if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
+                        if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' +
+                            str(r.url))
                         soup = BeautifulSoup(r.text)
-                        image = requests.get(soup.find(id='comic_page')['src'])
-                        if image.status_code != 200: raise plugin.PluginError(str(image.status_code) + ' error getting ' +
-                            str(image.url))
-                        urls.append(image.url)
-                        filenames.append(basename(image.url).replace('img',''))
-                    entry['urls'] = urls
-                    entry['filenames'] = filenames
+                        image = soup.find(id='comic_page')['src']
+                        filename = basename(image).replace('img','')
+
+                        newentry = copy(entry)
+                        newentry['url'] = image
+                        del(newentry['original_url'])
+                        newentry['title'] = ' '.join([seriesname, chaptername, 'page', filename])
+                        newentry['path'] = entry.get('path')
+                        newentry['filename'] = filename
+                        newentry['description'] = 'A page of %s' % entry['title']
+                        newentry.accept()
+                        newentries.append(newentry)
+                    task.all_entries.extend(newentries)
+                    finishedentries.append(entry)
                 except (AttributeError, TypeError) as e:
                     log.error('Encountered an error finding page images in chapter. Site could have been changed, ' +
                         'plugin update may be required.')
+                    log.error(e)
                     entry.fail(unicode('Error finding page images.'))
                     continue
                 except Exception as e:
                     entry.fail(unicode('Error finding page images. ') + unicode(e))
+                    log.error(e)
                     continue
-            entry['download_all'] = True
         else:
             if not haveworked: log.error('Encountered no batoto URLs.')
+        for entry in finishedentries: task.all_entries.remove(entry)
 
     def get_chapter(self, entry):
         """
