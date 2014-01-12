@@ -69,9 +69,7 @@ class Batoto(object):
 
     @plugin.priority(150)   #Needs to run before series@125. Might be better in input with very low priority.
     def on_task_metainfo(self, task, config):
-        log.debug('Entries: %s' % task.entries)
         for entry in task.entries:
-            log.debug('Entry: %s' % entry)
             if entry.get('title'): entry['title'] = entry.get('title').replace('Read Online','').strip()
             entry['description'] = entry.get('title')
 
@@ -85,7 +83,6 @@ class Batoto(object):
             if not urlparse(url)[1].endswith('batoto.net'):
                 log.warning('%s URL is not a batoto URL, ignoring.' % entry.get('title'))
                 continue
-
             try:
                 r = requests.get(url)
                 if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
@@ -93,19 +90,6 @@ class Batoto(object):
             except Exception as e:
                 entry.fail(unicode(e))
                 continue
-
-            #Are we on a series page? If so, try to get chapter page.
-            if urlparse(r.url)[2].startswith('/comic/_/comics/'):
-                try:
-                    url = self.get_chapter(entry)
-                    log.debug('Got url %s' % url)
-                    entry['url'] = url
-                    r = requests.get(url)
-                    if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
-                except plugin.PluginWarning: continue
-                except Exception as e:
-                    entry.fail(unicode(e))
-                    raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
 
             #Are we on a chapter page?
             if not urlparse(r.url)[2].startswith('/read/'):
@@ -188,9 +172,14 @@ class Batoto(object):
         else: log.verbose('URL looks like a series page. Attempting to get most recent chapter.')
         try:
             r = requests.get(entry['url'])
+            if not urlparse(r.url)[2].startswith('/comic/_/comics/'):
+                raise plugin.PluginError('Error getting page %s: Series may not exist at url.' % entry['url'])
             soup = BeautifulSoup(r.text)
             seriesname = soup.find('h1', 'ipsType_pagetitle').text
             rows = soup.find('table', 'chapters_list').findAll('tr','chapter_row')
+        except plugin.PluginError as e:
+            entry.fail(unicode(e))
+            raise
         except (AttributeError, TypeError) as e:
             log.error('Encountered an error finding chapters on series page. Site could have been changed, ' +
                 'plugin update may be required.')
