@@ -39,8 +39,7 @@ class Batoto(object):
     #This applies to all unexpected behaviour. Remember while troubleshooting.
     updatewarning = 'If this is unexpected, site may have changed. Plugin may require updating.'
 
-    @plugin.priority(150)   #Needs to run before series@125
-    def on_task_metainfo(self, task, config):
+    def on_task_start(self, task, config):
         newconfig = []
         if task.config.get('series'):
             log.debug('Doing identifier regex adjustments')
@@ -68,7 +67,11 @@ class Batoto(object):
             if 'Any' in self.language or 'None' in self.language: self.language = None
         log.debug('Language set to %s', self.language)
 
+    @plugin.priority(150)   #Needs to run before series@125. Might be better in input with very low priority.
+    def on_task_metainfo(self, task, config):
+        log.debug('Entries: %s' % task.entries)
         for entry in task.entries:
+            log.debug('Entry: %s' % entry)
             if entry.get('title'): entry['title'] = entry.get('title').replace('Read Online','').strip()
             entry['description'] = entry.get('title')
 
