@@ -10,9 +10,11 @@ from BeautifulSoup import BeautifulSoup
 from flexget import plugin
 from flexget.event import event
 from flexget.utils.titles import ID_TYPES
-from flexget.entry import Entry
 
 log = logging.getLogger('batoto')
+
+#The sequence regexp needed to properly handle batoto series if they don't have any *_regexps
+seqregexp = {'sequence_regexp': 'Ch[\.\s](\d+)'}
 
 class Batoto(object):
 	"""
@@ -36,10 +38,9 @@ class Batoto(object):
 
 	@plugin.priority(150)	#Needs to run before series@125
 	def on_task_metainfo(self, task, config):
-		#Add the sequence regexp needed to properly handle batoto series if they don't have any *_regexps
-		seqregexp = {'sequence_regexp': 'Ch[\.\s](\d+)'}
 		newconfig = []
 		if task.config.get('series'):
+			log.debug('Doing identifier regex adjustments')
 			for series in task.config.get('series'):
 				if not isinstance(series, dict): series = {series: None}
 				for seriesitem, properties in series.items():
@@ -182,6 +183,7 @@ class Batoto(object):
 			entry.fail(unicode('Error finding chapters. ') + unicode(e))
 			raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
 		parser = copy(entry.get('series_parser'))
+		log.debug('Looking for id: %s' % parser.pack_identifier)
 		h = HTMLParser.HTMLParser()
 		targetchapter = None
 		targettime = None
@@ -201,6 +203,7 @@ class Batoto(object):
 				clean_title = h.unescape(clean_title)
 				clean_title = re.sub('[_.,\[\]\(\):]', ' ', clean_title)
 				parser.parse(clean_title)
+				log.debug('Got id: %s' % parser.pack_identifier)
 				if parser.pack_identifier == entry.get('series_parser').pack_identifier:
 					log.debug('Chapter match: %s' % clean_title)
 				else: continue
