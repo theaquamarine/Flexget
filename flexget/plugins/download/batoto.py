@@ -282,6 +282,13 @@ class Batoto(object):
             actualtime = datetime.strptime(timestring, '%d %B %Y - %H:%M %p')
         return actualtime
 
+    def url_rewritable(self, task, entry):
+        url = urlparse(entry.get('url'))
+        return url[1].endswith('batoto.net') and url[2].startswith('/comic/_/comics/')
+
+    def url_rewrite(self, task, entry):
+        entry['url'] = self.get_chapter(entry)
+
 @event('plugin.register')
 def register_plugin():
-    plugin.register(Batoto, 'batoto', api_ver=2)
+    plugin.register(Batoto, 'batoto', groups=['urlrewriter'], api_ver=2)
