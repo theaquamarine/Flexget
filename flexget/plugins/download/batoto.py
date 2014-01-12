@@ -31,7 +31,10 @@ class Batoto(object):
     rss loads links into `urls`.
     """
 
-    schema = {'title': 'language', 'type': 'string'}
+    schema = {'oneOf': [
+                {'type': 'boolean', 'enum': [True]},
+                {'title': 'language', 'type': 'string'}
+            ]}
 
     #This applies to all unexpected behaviour. Remember while troubleshooting.
     updatewarning = 'If this is unexpected, site may have changed. Plugin may require updating.'
@@ -58,9 +61,11 @@ class Batoto(object):
                 newconfig.append(series)
             task.config['series'] = newconfig
 
-        self.language = config.split(' ')
-        self.language = [language.title() for language in self.language]
-        if 'Any' in self.language or 'None' in self.language: self.language = None
+        if isinstance(config, bool): self.language = None
+        else:
+            self.language = config.split(' ')
+            self.language = [language.title() for language in self.language]
+            if 'Any' in self.language or 'None' in self.language: self.language = None
         log.debug('Language set to %s', self.language)
 
         for entry in task.entries:
