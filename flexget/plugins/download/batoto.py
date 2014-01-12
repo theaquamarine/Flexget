@@ -96,8 +96,16 @@ class Batoto(object):
 
             #Are we on a series page? If so, try to get chapter page.
             if urlparse(r.url)[2].startswith('/comic/_/comics/'):
-                try: r = self.get_chapter(entry, r)
+                try:
+                    url = self.get_chapter(entry)
+                    log.debug('Got url %s' % url)
+                    entry['url'] = url
+                    r = requests.get(url)
+                    if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
                 except plugin.PluginWarning: continue
+                except Exception as e:
+                    entry.fail(unicode(e))
+                    raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
 
             #Are we on a chapter page?
             if not urlparse(r.url)[2].startswith('/read/'):
@@ -165,7 +173,7 @@ class Batoto(object):
         else:
             if not haveworked: log.error('Encountered no batoto URLs.')
 
-    def get_chapter(self, entry, r):
+    def get_chapter(self, entry):
         """
         Attempts to get a single chapter from a series page
 
@@ -179,6 +187,7 @@ class Batoto(object):
             % entry.get('title'))
         else: log.verbose('URL looks like a series page. Attempting to get most recent chapter.')
         try:
+            r = requests.get(entry['url'])
             soup = BeautifulSoup(r.text)
             seriesname = soup.find('h1', 'ipsType_pagetitle').text
             rows = soup.find('table', 'chapters_list').findAll('tr','chapter_row')
@@ -247,14 +256,10 @@ class Batoto(object):
         else:
             try:
                 url = targetchapter.find('a')['href']
-                entry['url'] = url
-                log.debug('Got url %s' % url)
-                r = requests.get(url)
-                if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
             except Exception as e:
                 entry.fail(unicode(e))
                 raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
-            return r
+            return url
 
     def string_to_time(self, timestring):
         """
