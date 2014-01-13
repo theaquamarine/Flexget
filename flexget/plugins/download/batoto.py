@@ -172,15 +172,39 @@ class Batoto(object):
             if not haveworked: log.error('Encountered no batoto URLs.')
         for entry in finishedentries: task.all_entries.remove(entry)
 
-    def get_chapter(self, entry):
+    def string_to_time(self, timestring):
+        """
+        Turns a fuzzy time ('x days ago', 'A week ago', etc) up to weeks into an absolute datetime.
+
+        :raises: TypeError if given a unit larger than weeks. Weeks is the largest unit used on the website before
+        switching to absolute time, so this should never happen.
+        """
+
+        timestring = timestring.replace('[A]', '')
+        if timestring.find('ago') != -1:
+            value, unit, direction = timestring.split()
+            if value.lower() == 'a' or value.lower() == 'an': value = float(1)
+            else: value = float(value)
+            if not unit.endswith('s'): unit = unit + 's'
+            if direction == 'ago': value *= -1
+            delta = timedelta(**{unit: value})
+            actualtime = datetime.now() + delta
+        else:
+            timestring = timestring.replace('Today,', datetime.now().strftime('%d %B %Y -'))
+            actualtime = datetime.strptime(timestring, '%d %B %Y - %H:%M %p')
+        return actualtime
+
+    def url_rewritable(self, task, entry):
+        url = urlparse(entry.get('url'))
+        return url[1].endswith('batoto.net') and url[2].startswith('/comic/_/comics/')
+
+    def url_rewrite(self, task, entry):
         """
         Attempts to get a single chapter from a series page
 
         Respects language settings. If a series parser is available, will look for a chapter matching 'title'. If not,
         it will attempt to create a temporary parser and use that to match 'title'. Failing that, it will get the most
         recent upload.
-
-        :raises: PluginWarning for errors it handles, mostly to allow caller to except PluginWarning: continue
         """
 
         log.verbose('URL looks like a series page. Attempting to get %s' % entry.get('title'))
@@ -277,35 +301,7 @@ class Batoto(object):
             except Exception as e:
                 entry.fail(unicode(e))
                 raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
-            return url
-
-    def string_to_time(self, timestring):
-        """
-        Turns a fuzzy time ('x days ago', 'A week ago', etc) up to weeks into an absolute datetime.
-
-        :raises: TypeError if given a unit larger than weeks. Weeks is the largest unit used on the website before
-        switching to absolute time, so this should never happen.
-        """
-        timestring = timestring.replace('[A]', '')
-        if timestring.find('ago') != -1:
-            value, unit, direction = timestring.split()
-            if value.lower() == 'a' or value.lower() == 'an': value = float(1)
-            else: value = float(value)
-            if not unit.endswith('s'): unit = unit + 's'
-            if direction == 'ago': value *= -1
-            delta = timedelta(**{unit: value})
-            actualtime = datetime.now() + delta
-        else:
-            timestring = timestring.replace('Today,', datetime.now().strftime('%d %B %Y -'))
-            actualtime = datetime.strptime(timestring, '%d %B %Y - %H:%M %p')
-        return actualtime
-
-    def url_rewritable(self, task, entry):
-        url = urlparse(entry.get('url'))
-        return url[1].endswith('batoto.net') and url[2].startswith('/comic/_/comics/')
-
-    def url_rewrite(self, task, entry):
-        entry['url'] = self.get_chapter(entry)
+            entry['url'] = url
 
 @event('plugin.register')
 def register_plugin():
