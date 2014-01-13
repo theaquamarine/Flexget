@@ -25,10 +25,8 @@ class Batoto(object):
     Adds a sequence_regexp to all series which have no other *regexps to enable parsing of batoto's titles. Strips the
     phrase 'read online' from `title` and `description`.
 
-    Sets `filename` using information from chapter page, expecting this to be used as a save directory for the chapter.
-    Page image URLs are loaded into `urls` and `filenames` for later processing, with a `download_all` flag set to
-    instruct download to download all urls in `urls` rather than stopping at first successful download as happens when
-    rss loads links into `urls`.
+    Creates a pre-accepted entry for each page in accepted comics and removes the entry representing the entire comic,
+    to prevent invalid entry failure errors when attempting to download the html chapter page.
     """
 
     schema = {'oneOf': [
