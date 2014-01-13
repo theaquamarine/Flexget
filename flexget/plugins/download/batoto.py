@@ -9,12 +9,12 @@ import requests
 from BeautifulSoup import BeautifulSoup
 from flexget import plugin
 from flexget.event import event
-from flexget.utils.titles import ID_TYPES
+from flexget.utils.titles import ID_TYPES, SeriesParser
 
 log = logging.getLogger('batoto')
 
 #The sequence regexp needed to properly handle batoto series if they don't have any *_regexps
-seqregexp = {'sequence_regexp': 'Ch[\.\s](\d+)'}
+seqregexp = 'Ch[\.\s](\d+)'
 
 class Batoto(object):
     """
@@ -54,7 +54,7 @@ class Batoto(object):
                         log.warning(('\'from_group\' is set for series \'%s\': This will cause no batoto items to be ' +
                             'accepted for it.') % seriesitem)
                     if not any(properties.get(id_type + '_regexp') for id_type in ID_TYPES):
-                        properties.update(seqregexp)
+                        properties.update({'sequence_regexp': seqregexp})
                         log.debug('Adding sequence regex to series \'%s\'' % seriesitem)
                     series[seriesitem] = properties
                 newconfig.append(series)
@@ -134,7 +134,7 @@ class Batoto(object):
             #Prep pages for download
             if task.manager.options.test:
                 log.info('Would prep pages of ' + seriesname + ' ' + chaptername)
-                log.debug(pages)
+                #log.debug(pages)
             else:
                 log.info('Prepping pages of ' + seriesname + ' ' + chaptername + ' - This might take a while!')
                 newentries = []
@@ -177,14 +177,13 @@ class Batoto(object):
         Attempts to get a single chapter from a series page
 
         Respects language settings. If a series parser is available, will look for a chapter matching 'title'. If not,
-        it will get the most recent upload.
+        it will attempt to create a temporary parser and use that to match 'title'. Failing that, it will get the most
+        recent upload.
 
         :raises: PluginWarning for errors it handles, mostly to allow caller to except PluginWarning: continue
         """
 
-        if entry.get('series_parser'): log.verbose('URL looks like a series page. Attempting to get %s'
-            % entry.get('title'))
-        else: log.verbose('URL looks like a series page. Attempting to get most recent chapter.')
+        log.verbose('URL looks like a series page. Attempting to get %s' % entry.get('title'))
         try:
             r = requests.get(entry['url'])
             if not urlparse(r.url)[2].startswith('/comic/_/comics/'):
@@ -203,8 +202,22 @@ class Batoto(object):
         except Exception as e:
             entry.fail(unicode('Error finding chapters. ') + unicode(e))
             raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
-        parser = copy(entry.get('series_parser'))
-        log.debug('Looking for id: %s' % parser.pack_identifier)
+        temp_parser = False
+        if entry.get('series_parser'): parser = copy(entry['series_parser'])
+        else:
+            name = entry.get('title').split(' ')[0]
+            parser = SeriesParser(name=name, identified_by='sequence', sequence_regexps=[seqregexp])
+            try: parser.parse(entry['title'], field='title')
+            except Exception as e:
+                parser = None
+                log.error(e)
+            if parser and parser.valid:
+                entry['series_parser'] = copy(parser)
+                temp_parser = True
+            if parser and not parser.valid: parser = None
+            log.debug('Parser = %s' % parser)
+        if parser: log.debug('Looking for id: %s' % parser.pack_identifier)
+        else: log.warning('Unable to create a parser. Getting most recent chapter instead.')
         h = HTMLParser.HTMLParser()
         targetchapter = None
         targettime = None
@@ -249,6 +262,7 @@ class Batoto(object):
                 targetchapter = row
                 targettime = chaptertime
                 if self.language: targetlanguage = chapterlanguage
+        if temp_parser: del entry['series_parser']
         if not targetchapter:
             exitstring = 'Unable to find chapter %s' % entry.get('title')
             if self.language:
