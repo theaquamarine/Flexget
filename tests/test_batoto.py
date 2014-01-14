@@ -266,11 +266,11 @@ class TestBatotoSetup(FlexGetBase):
                 assert isinstance(properties, dict), 'Series properties should be a dict'
                 assert properties.get('sequence_regexp') != seqregexp, '`sequence_regexp` should not be loaded.'
 
-    def test_from_group(self):
-        #Test handling of series with 'from_group' set
-        #Expected: issue warning message indicating this breaks batoto
-        self.execute_task('test_from_group', options=dict(disable_phases=['download', 'output']))
-        #TODO: actually test something...
+    # def test_from_group(self):
+    #     #Test handling of series with 'from_group' set
+    #     #Expected: issue warning message indicating this breaks batoto
+    #     self.execute_task('test_from_group', options=dict(disable_phases=['download', 'output']))
+    #     #TODO: actually test something...
 
     @attr(online=True)
     def test_regex_parsing(self): pass
