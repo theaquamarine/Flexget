@@ -1,0 +1,219 @@
+from __future__ import unicode_literals, division, absolute_import
+from datetime import datetime, timedelta
+from nose.tools import assert_raises
+from nose.plugins.attrib import attr
+from tests import FlexGetBase
+from flexget.utils.titles import ID_TYPES
+from flexget.plugin import get_plugin_by_name
+from flexget.plugins.download.batoto import seqregexp
+
+class TestBatoto(FlexGetBase):
+
+    # __yaml__ = """
+    # YAML GOES HERE
+    # """
+
+    @attr(online=True)
+    def test_get_chapter_pages(self): pass
+        #Test finding urls of pages from chapter correctly
+        #Expected: correct urls for each page
+
+    @attr(online=True)
+    def test_get_chapter_page_images(self): pass
+        #Test finding urls of page images correctly
+        #Expected: correct urls for each image
+
+    @attr(online=True)
+    def test_invalid_page(self): pass
+        #Test handling of an invalid/non-200 page image link
+
+    @attr(online=True)
+    def test_invalid_chapter(self): pass
+        #Test handling of an invalid chapter link
+
+    @attr(online=True)
+    def test_invalid_series(self): pass
+        #Test handling of an invalid series link
+
+    @attr(online=True)
+    def test_invalid_url(self): pass
+        #Test handling of absolute garbage?
+
+    @attr(online=True)
+    def test_get_series_title(self): pass
+        #Test parsing chapter page to get series name
+        #Expected: accurate series name
+
+    @attr(online=True)
+    def test_get_chapter_title(self): pass
+        #Test parsing chapter page to get chapter name
+        #Expected: accurate chapter name
+
+    #def test_get_chapter_number(self): pass  #maybe?
+    #Test language matching?
+
+class TestBatotoRewriter(FlexGetBase):
+    def test_chapter_match_parser(self): pass
+        #Test chapter matching when entry has a working series_parser.
+        #Expected: chapter described in 'title' is accurately selected.
+
+    def test_chapter_match_temp_parser(self): pass
+        #Test chapter matching when creating a temporary series_parser.
+        #Expected: a temporary series parser is created and used to accurately pick chapter described in 'title'.
+
+    def test_chapter_match_no_parser(self): pass
+        #Test chapter matching when unable to create a temporary series_parser.
+        #Expected: most recent upload is selected.
+
+    def test_chapter_match_multiple_id_match(self): pass
+        #Test chapter matching when multiple chapters in target language match.
+        #Expected: most recent upload is selected.
+
+    def test_chapter_match_multiple_lang_match(self): pass
+        #Test chapter matching when multiple chapters in different target languages match.
+        #Expected: language priority handles, picks highest-priority language.
+
+class TestBatotoSetup(FlexGetBase):
+
+    __yaml__ = """
+        templates:
+          testdata:
+            set:
+              path: 'C:\'
+            batoto: yes
+            mock:
+              - {title: 'Bartender - English - Vol.14 Ch.106: Undesirable Guests (Part 3)',
+                    url: 'http://www.batoto.net/read/_/215228/bartender_v14_ch106'}
+              - {title: 'Nichijou - English - Vol.6 Ch.94 Read Online',
+                    url: 'http://www.batoto.net/read/_/216088/nichijou_v6_ch94'}
+
+        tasks:
+          regex_simple:
+            template: testdata
+            series:
+              - bartender
+
+
+          regex_complex:
+            template: testdata
+            series:
+              - bartender
+
+          regex_parse:
+            template: testdata
+            series:
+              - bartender
+
+          test_from_group:
+            template: testdata
+            series:
+              - bartender: {from_group: 'CityShrimp'}
+
+          regex_noclobber:
+            template: testdata
+            series:
+              - nichijou: {id_regexp: 'Ch[\.\s](\d+(?:.*short \d+)?)'}
+
+          language_bool:
+            batoto: yes
+
+          language_string:
+            batoto: english french
+
+          language_nullify:
+            batoto: english french any
+    """
+
+    def test_load_regex_simple(self):
+        #Test loading seqregexp into a series with no other configuration
+        #Expected: seqregexp loaded correctly
+        self.execute_task('regex_simple', options=dict(disable_phases=['download', 'output']))
+        for series in self.task.config.get('series'):
+            print series
+            print type(series)
+            assert isinstance(series, dict), 'Modified series should be a dict'
+            for seriesitem, properties in series.items():
+                assert isinstance(properties, dict), 'Series properties should be a dict'
+                assert properties.has_key('sequence_regexp'), 'Modified series should have a `sequence_regexp` key.'
+                assert properties.get('sequence_regexp') == seqregexp, '`sequence_regexp` is incorrect.'
+
+    def test_load_regex_complex(self):
+        #test loading seqregexp into a series with non-identifier configuration
+        #Expected: seqregexp loaded correctly
+        self.execute_task('regex_complex', options=dict(disable_phases=['download', 'output']))
+        for series in self.task.config.get('series'):
+            assert isinstance(series, dict), 'Complex or modified series should be dicts'
+            for seriesitem, properties in series.items():
+                assert isinstance(properties, dict), 'Series properties should be a dict'
+                assert properties.has_key('sequence_regexp'), 'Modified series should have a `sequence_regexp` key.'
+                assert properties.get('sequence_regexp') == seqregexp, '`sequence_regexp` is incorrect.'
+
+    def test_load_regex_no_clobber(self):
+        #Test loading seqregexp when series has other id_regexps
+        #Expected: seqregexp is not loaded
+        self.execute_task('regex_noclobber', options=dict(disable_phases=['download', 'output']))
+        for series in self.task.config.get('series'):
+            assert isinstance(series, dict), 'Complex or modified series should be dicts'
+            for seriesitem, properties in series.items():
+                print properties
+                assert any(properties.get(id_type + '_regexp') for id_type in ID_TYPES), ('Series does not have any ' +
+                    'identifier regexps')
+                assert isinstance(properties, dict), 'Series properties should be a dict'
+                assert properties.get('sequence_regexp') != seqregexp, '`sequence_regexp` should not be loaded.'
+
+    def test_from_group(self): pass
+        #Test handling of series with 'from_group' set
+        #Expected: issue warning message indicating this breaks batoto
+        #self.execute_task('test_from_group', options=dict(disable_phases=['download', 'output']))
+
+    @attr(online=True)
+    def test_regex_parsing(self): pass
+        #Test seqregexp's ability to correctly parse 'normal' chapter titles
+        #Expected: correct series_identifier
+        #self.execute_task('regex_parse')
+        #Offline version with stored title string?
+
+    def test_language_bool(self):
+        self.execute_task('language_bool', options=dict(disable_phases=['download', 'output']))
+        batoto = get_plugin_by_name('batoto')
+        expectedlanguages = None
+        assert batoto.instance.language == expectedlanguages, ('Language should be set to \'None\' but is %s' %
+                                                    batoto.instance.language)
+
+    def test_language_string(self):
+        self.execute_task('language_string', options=dict(disable_phases=['download', 'output']))
+        batoto = get_plugin_by_name('batoto')
+        expectedlanguages = ['English', 'French']
+        assert batoto.instance.language == expectedlanguages, ('Language should be set to %s but is %s' %
+                                                                (expectedlanguages, batoto.instance.language))
+
+    def test_language_nullify(self):
+        self.execute_task('language_nullify', options=dict(disable_phases=['download', 'output']))
+        batoto = get_plugin_by_name('batoto')
+        expectedlanguages = None
+        assert batoto.instance.language == expectedlanguages, ('Language should be set to %s but is %s' %
+                                                                (expectedlanguages, batoto.instance.language))
+
+class TestStringtoTime(FlexGetBase):
+
+    __yaml__ = """
+        tasks:
+          stringtotime:
+            batoto: yes
+    """
+
+    def test_string_to_time(self):
+        self.execute_task('stringtotime', options=dict(disable_phases=['download', 'output']))
+        batoto = get_plugin_by_name('batoto').instance
+        batoto.string_to_time('a second ago') == datetime.now() - timedelta(seconds=1)
+        batoto.string_to_time('60 seconds ago') == datetime.now() - timedelta(seconds=60)
+        batoto.string_to_time('a minute ago') == datetime.now() - timedelta(minutes=1)
+        batoto.string_to_time('60 minutes ago') == datetime.now() - timedelta(minutes=60)
+        batoto.string_to_time('a day ago') == datetime.now() - timedelta(days=1)
+        batoto.string_to_time('7 days ago') == datetime.now() - timedelta(days=7)
+        batoto.string_to_time('a week ago') == datetime.now() - timedelta(weeks=1)
+        batoto.string_to_time('4 weeks ago') == datetime.now() - timedelta(weeks=4)
+        batoto.string_to_time('Today, %s' % datetime.now().strftime('%H:%M %p')) == datetime.now()
+        # for timestring, target in tests:
+        #     assert batoto.string_to_time(timestring) == target, str('%s converted to %s but should be %s',
+        #                                                     (timestring, batoto.string_to_time(timestring), target))
