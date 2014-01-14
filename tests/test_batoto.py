@@ -11,7 +11,7 @@ class TestBatoto(FlexGetBase):
 
     __yaml__ = """
     tasks:
-      arakawa:
+      chapterpages:
         set:
           path: 'adirectory'
         mock:
@@ -38,14 +38,24 @@ class TestBatoto(FlexGetBase):
 
     @attr(online=True)
     def test_get_chapter_pages(self):
-        #Test finding urls of pages from chapter correctly
-        #Expected: correct urls for each page
-        self.execute_task('arakawa', options=dict(disable_phases=['output']))
-        entry = self.task.find_entry(title='Arakawa Under the Bridge Vol.8 Ch.X-8- Distant Thunder page 000001.jpg')
-        assert len(self.task.entries) == 3, 'Incorrect number of page entries'
+        self.execute_task('chapterpages', options=dict(disable_phases=['output']))
+
+        #Test language matching
+        #Expected: accepts chapters matching language, fails others.
+        assert self.task.find_entry(category='accepted',
+            title='Arakawa Under the Bridge Vol.8 Ch.X-8- Distant Thunder page 000001.jpg'), (
+            'Language which should have been accepted was not.')
+        assert self.task.find_entry(category='rejected',
+            description='Arakawa Under the Bridge Vol.1 Ch.2: Bajo el puente de la Gran Estrella'), (
+            'Language which should have been rejected was not.')
+
+        #Test collection of pages from chapter
+        #Expected: Correct number of entries (ie correct number of pages)
+        assert len(self.task.accepted) == 3, 'Incorrect number of page entries'
         #Could be either wrong number of pages found, extra entries accepted or page entries not being created correctly
 
-        #Inspect page urls
+        #Test finding urls of pages from chapter correctly
+        #Expected: correct urls for each page
         pages = ('http://img.batoto.net/comics/2011/12/15/a/read4ee9e6d43f380/img000001.jpg',
                 'http://img.batoto.net/comics/2011/12/15/a/read4ee9e6d43f380/img000002.jpg',
                 'http://img.batoto.net/comics/2011/12/15/a/read4ee9e6d43f380/img000003.jpg')
@@ -57,18 +67,6 @@ class TestBatoto(FlexGetBase):
 
         #Test parsing chapter page to get chapter name
         #Expected: accurate chapter name
-
-    @attr(online=True)
-    def test_chapter_language(self):
-        #Test language matching
-        #Expected: accepts chapters matching language, fails others.
-        self.execute_task('arakawa', options=dict(disable_phases=['output']))
-        assert self.task.find_entry(category='accepted',
-            title='Arakawa Under the Bridge Vol.8 Ch.X-8- Distant Thunder page 000001.jpg'), (
-            'Language which should have been accepted was not.')
-        assert self.task.find_entry(category='rejected',
-            description='Arakawa Under the Bridge Vol.1 Ch.2: Bajo el puente de la Gran Estrella'), (
-            'Language which should have been rejected was not.')
 
     @attr(online=True)
     def test_invalid_urls(self):
