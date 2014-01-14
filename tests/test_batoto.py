@@ -39,6 +39,15 @@ class TestBatoto(FlexGetBase):
                 url: 'http://www.batoto.net/sdfsdfsdfsdfsdfsdfasdfgarxcvsdf'}
         accept_all: yes
         batoto: English
+
+      irrelevanturl:
+        set:
+          path: 'adirectory'
+        mock:
+          - {title: 'Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder',
+                url: 'http://www.google.com'}
+        accept_all: yes
+        batoto: English
     """
 
     @attr(online=True)
@@ -92,6 +101,14 @@ class TestBatoto(FlexGetBase):
         assert self.task.find_entry(category='failed',
             title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder'), (
             'Entry which should have failed did not.')
+
+    @attr(online=True)
+    def test_irrelevant_url(self):
+        #Test handling of a non-batoto url
+        #Expected: Entry is skipped and left alone.
+        self.execute_task('irrelevanturl', options=dict(disable_phases=['output']))
+        assert self.task.find_entry(title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder'), (
+            'Entry which should not have been modified was.')
 
 class TestBatotoRewriter(FlexGetBase):
 
