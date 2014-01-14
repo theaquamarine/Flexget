@@ -104,7 +104,8 @@ class Batoto(object):
                 language = basename(soup.find('select', {'name':'group_select'}).
                     find('option', {'selected':'selected'})['value'])
                 if self.language and language not in self.language:
-                    entry.fail(unicode('Chapter does not match required language.'))
+                    entry.reject(unicode('Chapter does not match required language.'))
+                    continue
                 seriesname = h.unescape(soup.find('div', 'moderation_bar').find('a').text.replace(':','-'))
                 chaptername = h.unescape(soup.find('select', {'name':'chapter_select'}).
                     find('option', {'selected':'selected'}).text.replace(':','-'))
