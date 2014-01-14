@@ -4,7 +4,8 @@ from nose.tools import assert_raises
 from nose.plugins.attrib import attr
 from tests import FlexGetBase
 from flexget.utils.titles import ID_TYPES
-from flexget.plugin import get_plugin_by_name
+from flexget.task import TaskAbort
+from flexget.plugin import get_plugin_by_name, PluginError
 from flexget.plugins.download.batoto import seqregexp
 
 class TestBatoto(FlexGetBase):
@@ -53,25 +54,93 @@ class TestBatoto(FlexGetBase):
     #Test language matching?
 
 class TestBatotoRewriter(FlexGetBase):
-    def test_chapter_match_parser(self): pass
+
+    __yaml__ = """
+        tasks:
+          match_parser:
+            mock:
+              - {title: 'Bartender - English - Vol.14 Ch.106: Undesirable Guests (Part 3)',
+                    url: 'http://www.batoto.net/comic/_/comics/bartender-r198'}
+            series:
+              - bartender
+            batoto: yes
+
+          temp_parser:
+            mock:
+              - {title: 'Bartender - English - Vol.14 Ch.106: Undesirable Guests (Part 3)',
+                    url: 'http://www.batoto.net/comic/_/comics/bartender-r198'}
+            accept_all: yes
+            batoto: yes
+
+          no_parser:
+            mock:
+              - {title: 'WILDLY_INVALID_PARSER', url: 'http://www.batoto.net/comic/_/comics/bartender-r198'}
+            accept_all: yes
+            batoto: yes
+
+          match_lang:
+            mock:
+              - {title: 'Nichijou Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/nichijou-r188'}
+            series:
+              - nichijou
+            batoto: German English Italian
+
+          garbage_series:
+            mock:
+              - {title: 'Nichijou Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/ddddddddddddddddddddddddddd'}
+            accept_all: yes
+    """
+
+    @attr(online=True)
+    def test_chapter_match_parser(self):
         #Test chapter matching when entry has a working series_parser.
         #Expected: chapter described in 'title' is accurately selected.
+        self.execute_task('match_parser', options=dict(disable_phases=['download', 'output']))
+        entry = self.task.find_entry(title='Bartender - English - Vol.14 Ch.106: Undesirable Guests (Part 3)')
+        targeturl = 'http://www.batoto.net/read/_/215228/bartender_v14_ch106_by_cityshrimp'
+        assert entry['url'] == targeturl, ('Entry url is %s and should be %s' % (entry['url'], targeturl))
 
-    def test_chapter_match_temp_parser(self): pass
+    @attr(online=True)
+    def test_chapter_match_temp_parser(self):
         #Test chapter matching when creating a temporary series_parser.
         #Expected: a temporary series parser is created and used to accurately pick chapter described in 'title'.
+        self.execute_task('temp_parser', options=dict(disable_phases=['download', 'output']))
+        entry = self.task.find_entry(title='Bartender - English - Vol.14 Ch.106: Undesirable Guests (Part 3)')
+        targeturl = 'http://www.batoto.net/read/_/215228/bartender_v14_ch106_by_cityshrimp'
+        assert entry['url'] == targeturl, ('Entry url is %s and should be %s' % (entry['url'], targeturl))
 
-    def test_chapter_match_no_parser(self): pass
+    @attr(online=True)
+    def test_chapter_match_no_parser(self):
         #Test chapter matching when unable to create a temporary series_parser.
         #Expected: most recent upload is selected.
+        self.execute_task('no_parser', options=dict(disable_phases=['download', 'output']))
+        entry = self.task.find_entry(title='WILDLY_INVALID_PARSER')
+        #This will break with time. Change it to a long-dead series.
+        targeturl = 'http://www.batoto.net/read/_/215228/bartender_v14_ch106_by_cityshrimp'
+        assert entry['url'] == targeturl, ('Entry url is %s and should be %s' % (entry['url'], targeturl))
 
+    @attr(online=True)
     def test_chapter_match_multiple_id_match(self): pass
         #Test chapter matching when multiple chapters in target language match.
         #Expected: most recent upload is selected.
 
-    def test_chapter_match_multiple_lang_match(self): pass
+    @attr(online=True)
+    def test_chapter_match_lang(self):
         #Test chapter matching when multiple chapters in different target languages match.
         #Expected: language priority handles, picks highest-priority language.
+        self.execute_task('match_lang', options=dict(disable_phases=['download', 'output']))
+        entry = self.task.find_entry(title='Nichijou Vol.1 Ch.1')
+        targeturl = 'http://www.batoto.net/read/_/174891/nichijou_v1_ch1_by_kanjiku'
+        assert entry['url'] == targeturl, ('Entry url is %s and should be %s' % (entry['url'], targeturl))
+
+    @attr(online=True)
+    def test_garbage_series(self):
+        #Test attempting to find a chapter in a non-existent series
+        #Expected: raise plugin.PluginError('Error getting page %s: Series may not exist at url.' % entry['url'])
+        self.execute_task('garbage_series', options=dict(disable_phases=['download', 'output']))
+        # assert_raises(TaskAbort, self.execute_task, 'garbage_series',
+        #     options=dict(disable_phases=['download', 'output']))
+        assert self.task.find_entry('failed', title='Nichijou Vol.1 Ch.1'), 'Entry should have failed.'
 
 class TestBatotoSetup(FlexGetBase):
 
@@ -161,10 +230,11 @@ class TestBatotoSetup(FlexGetBase):
                 assert isinstance(properties, dict), 'Series properties should be a dict'
                 assert properties.get('sequence_regexp') != seqregexp, '`sequence_regexp` should not be loaded.'
 
-    def test_from_group(self): pass
+    def test_from_group(self):
         #Test handling of series with 'from_group' set
         #Expected: issue warning message indicating this breaks batoto
-        #self.execute_task('test_from_group', options=dict(disable_phases=['download', 'output']))
+        self.execute_task('test_from_group', options=dict(disable_phases=['download', 'output']))
+        #TODO: actually test something...
 
     @attr(online=True)
     def test_regex_parsing(self): pass
