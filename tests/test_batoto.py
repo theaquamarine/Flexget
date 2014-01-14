@@ -1,57 +1,97 @@
 from __future__ import unicode_literals, division, absolute_import
 from datetime import datetime, timedelta
-from nose.tools import assert_raises
+from itertools import izip_longest
 from nose.plugins.attrib import attr
 from tests import FlexGetBase
 from flexget.utils.titles import ID_TYPES
-from flexget.task import TaskAbort
-from flexget.plugin import get_plugin_by_name, PluginError
+from flexget.plugin import get_plugin_by_name
 from flexget.plugins.download.batoto import seqregexp
 
 class TestBatoto(FlexGetBase):
 
-    # __yaml__ = """
-    # YAML GOES HERE
-    # """
+    __yaml__ = """
+    tasks:
+      arakawa:
+        set:
+          path: 'adirectory'
+        mock:
+          - {title: 'Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder',
+                url: 'http://www.batoto.net/read/_/62326/arakawa-under-the-bridge_v8_chx-8_by_slowmanga'}
+          - {title: 'Arakawa Under the Bridge Vol.1 Ch.2: Bajo el puente de la Gran Estrella',
+                url: 'http://www.batoto.net/read/_/167114/arakawa-under-the-bridge_v1_ch2_by_majo-no-fansub'}
+        accept_all: yes
+        batoto: English
+
+      garbagechapter:
+        set:
+          path: 'adirectory'
+        mock:
+          - {title: 'Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder',
+                url: 'http://www.batoto.net/read/_/62334526/arakawa-under-the-bridge_v8_chx-8_by_slowmanga'}
+        accept_all: yes
+        batoto: English
+
+      garbageurl:
+        set:
+          path: 'adirectory'
+        mock:
+          - {title: 'Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder',
+                url: 'http://www.batoto.net/sdfsdfsdfsdfsdfsdfasdfgarxcvsdf'}
+        accept_all: yes
+        batoto: English
+    """
 
     @attr(online=True)
-    def test_get_chapter_pages(self): pass
+    def test_get_chapter_pages(self):
         #Test finding urls of pages from chapter correctly
         #Expected: correct urls for each page
+        self.execute_task('arakawa', options=dict(disable_phases=['output']))
+        entry = self.task.find_entry(title='Arakawa Under the Bridge Vol.8 Ch.X-8- Distant Thunder page 000001.jpg')
+        assert len(self.task.entries) == 3, 'Incorrect number of page entries'
+        #Could be either wrong number of pages found, extra entries accepted or page entries not being created correctly
 
-    @attr(online=True)
-    def test_get_chapter_page_images(self): pass
-        #Test finding urls of page images correctly
-        #Expected: correct urls for each image
+        #Inspect page urls
+        pages = ('http://img.batoto.net/comics/2011/12/15/a/read4ee9e6d43f380/img000001.jpg',
+                'http://img.batoto.net/comics/2011/12/15/a/read4ee9e6d43f380/img000002.jpg',
+                'http://img.batoto.net/comics/2011/12/15/a/read4ee9e6d43f380/img000003.jpg')
+        for entry, url in izip_longest(self.task.entries, pages):
+            assert entry.get('url') == url
 
-    @attr(online=True)
-    def test_invalid_page(self): pass
-        #Test handling of an invalid/non-200 page image link
-
-    @attr(online=True)
-    def test_invalid_chapter(self): pass
-        #Test handling of an invalid chapter link
-
-    @attr(online=True)
-    def test_invalid_series(self): pass
-        #Test handling of an invalid series link
-
-    @attr(online=True)
-    def test_invalid_url(self): pass
-        #Test handling of absolute garbage?
-
-    @attr(online=True)
-    def test_get_series_title(self): pass
         #Test parsing chapter page to get series name
         #Expected: accurate series name
 
-    @attr(online=True)
-    def test_get_chapter_title(self): pass
         #Test parsing chapter page to get chapter name
         #Expected: accurate chapter name
 
-    #def test_get_chapter_number(self): pass  #maybe?
-    #Test language matching?
+    @attr(online=True)
+    def test_chapter_language(self):
+        #Test language matching
+        #Expected: accepts chapters matching language, fails others.
+        self.execute_task('arakawa', options=dict(disable_phases=['output']))
+        assert self.task.find_entry(category='accepted',
+            title='Arakawa Under the Bridge Vol.8 Ch.X-8- Distant Thunder page 000001.jpg'), (
+            'Language which should have been accepted was not.')
+        assert self.task.find_entry(category='rejected',
+            description='Arakawa Under the Bridge Vol.1 Ch.2: Bajo el puente de la Gran Estrella'), (
+            'Language which should have been rejected was not.')
+
+    @attr(online=True)
+    def test_invalid_chapter(self):
+        #Test handling of an invalid chapter link
+        #Expected: Entry fails, execution continues
+        self.execute_task('garbagechapter', options=dict(disable_phases=['output']))
+        assert self.task.find_entry(category='failed',
+            title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder'), (
+            'Entry which should have failed did not.')
+
+    @attr(online=True)
+    def test_invalid_url(self):
+        #Test handling of invalid url
+        #Expected: Entry fails, execution continues
+        self.execute_task('garbageurl', options=dict(disable_phases=['output']))
+        assert self.task.find_entry(category='failed',
+            title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder'), (
+            'Entry which should have failed did not.')
 
 class TestBatotoRewriter(FlexGetBase):
 
@@ -284,6 +324,3 @@ class TestStringtoTime(FlexGetBase):
         batoto.string_to_time('a week ago') == datetime.now() - timedelta(weeks=1)
         batoto.string_to_time('4 weeks ago') == datetime.now() - timedelta(weeks=4)
         batoto.string_to_time('Today, %s' % datetime.now().strftime('%H:%M %p')) == datetime.now()
-        # for timestring, target in tests:
-        #     assert batoto.string_to_time(timestring) == target, str('%s converted to %s but should be %s',
-        #                                                     (timestring, batoto.string_to_time(timestring), target))
