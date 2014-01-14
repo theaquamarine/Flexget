@@ -114,6 +114,12 @@ class TestBatotoRewriter(FlexGetBase):
             accept_all: yes
             batoto: yes
 
+          match_multiple:
+            mock:
+              - {title: 'D-FRAG Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/d-frag-r444'}
+            accept_all: yes
+            batoto: English
+
           match_lang:
             mock:
               - {title: 'Nichijou Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/nichijou-r188'}
@@ -156,9 +162,16 @@ class TestBatotoRewriter(FlexGetBase):
         assert entry['url'] == targeturl, ('Entry url is %s and should be %s' % (entry['url'], targeturl))
 
     @attr(online=True)
-    def test_chapter_match_multiple_id_match(self): pass
+    def test_chapter_id_match_multiple(self):
         #Test chapter matching when multiple chapters in target language match.
         #Expected: most recent upload is selected.
+        self.execute_task('match_multiple', options=dict(disable_phases=['download', 'output']))
+        entry = self.task.find_entry(title='D-FRAG Vol.1 Ch.1')
+        #This will break with time. Change it to a long-dead series.
+        targeturl = 'http://www.batoto.net/read/_/97581/d-frag_v1_ch1_by_re-frag-manga'
+        avoidurl = 'http://www.batoto.net/read/_/6423/d-frag_v1_ch1_by_because-i-wanna'
+        assert entry['url'] != avoidurl, ('Not selected most recent matching upload.')
+        assert entry['url'] == targeturl, ('Entry url is %s and should be %s' % (entry['url'], targeturl))
 
     @attr(online=True)
     def test_chapter_match_lang(self):
