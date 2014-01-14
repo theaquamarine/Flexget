@@ -11,6 +11,7 @@ from flexget import plugin
 from flexget.event import event
 from flexget.utils.titles import ID_TYPES, SeriesParser
 from flexget.utils.tools import TimedDict
+from flexget.plugin import get_plugin_by_name
 
 log = logging.getLogger('batoto')
 
@@ -143,9 +144,11 @@ class Batoto(object):
                 newentries = []
                 try:
                     for page in pages:
-                        r = requests.get(page['value'])
-                        if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' +
-                            str(r.url))
+                        #Avoid getting the first page twice if we can
+                        if page['value'] != r.url + '/1':
+                            r = requests.get(page['value'])
+                            if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' +
+                                str(r.url))
                         soup = BeautifulSoup(r.text)
                         image = soup.find(id='comic_page')['src']
                         filename = basename(image).replace('img','')
@@ -172,7 +175,10 @@ class Batoto(object):
                     continue
         else:
             if not haveworked: log.error('Encountered no batoto URLs.')
-        for entry in finishedentries: task.all_entries.remove(entry)
+        seen = get_plugin_by_name('seen')
+        for entry in finishedentries:
+            seen.instance.learn(task, entry)
+            task.all_entries.remove(entry)
 
     def string_to_time(self, timestring):
         """
