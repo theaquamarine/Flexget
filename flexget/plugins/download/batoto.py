@@ -210,11 +210,11 @@ class Batoto(object):
         """
 
         log.verbose('URL looks like a series page. Attempting to get %s' % entry.get('title'))
-        if entry['url'] in self.cache:
+        if entry['url'] in self.cache and not task.options.nocache:
             log.verbose('Using cached page for %s' % entry['url'])
             text = self.cache[entry['url']]
         else:
-            log.verbose('No cache exists for %s. Getting.' % entry['url'])
+            if not task.options.nocache: log.verbose('No cache exists for %s. Getting.' % entry['url'])
             try:
                 r = requests.get(entry['url'])
                 if not urlparse(r.url)[2].startswith('/comic/_/comics/'):
