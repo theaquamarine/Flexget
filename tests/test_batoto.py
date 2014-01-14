@@ -22,29 +22,15 @@ class TestBatoto(FlexGetBase):
         accept_all: yes
         batoto: English
 
-      garbagechapter:
+      urltests:
         set:
           path: 'adirectory'
         mock:
-          - {title: 'Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder',
-                url: 'http://www.batoto.net/read/_/62334526/arakawa-under-the-bridge_v8_chx-8_by_slowmanga'}
-        accept_all: yes
-        batoto: English
-
-      garbageurl:
-        set:
-          path: 'adirectory'
-        mock:
-          - {title: 'Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder',
+          - {title: 'Invalid Chapter Entry',
+                url: 'http://www.batoto.net/read/_/62334526623345265456345645645645645645633735'}
+          - {title: 'Garbage URL Entry',
                 url: 'http://www.batoto.net/sdfsdfsdfsdfsdfsdfasdfgarxcvsdf'}
-        accept_all: yes
-        batoto: English
-
-      irrelevanturl:
-        set:
-          path: 'adirectory'
-        mock:
-          - {title: 'Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder',
+          - {title: 'Irrelevant URL Entry',
                 url: 'http://www.google.com'}
         accept_all: yes
         batoto: English
@@ -85,29 +71,24 @@ class TestBatoto(FlexGetBase):
             'Language which should have been rejected was not.')
 
     @attr(online=True)
-    def test_invalid_chapter(self):
+    def test_invalid_urls(self):
+        self.execute_task('urltests', options=dict(disable_phases=['output']))
+
         #Test handling of an invalid chapter link
         #Expected: Entry fails, execution continues
-        self.execute_task('garbagechapter', options=dict(disable_phases=['output']))
         assert self.task.find_entry(category='failed',
-            title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder'), (
+            title='Invalid Chapter Entry'), (
             'Entry which should have failed did not.')
 
-    @attr(online=True)
-    def test_invalid_url(self):
         #Test handling of invalid url
         #Expected: Entry fails, execution continues
-        self.execute_task('garbageurl', options=dict(disable_phases=['output']))
         assert self.task.find_entry(category='failed',
-            title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder'), (
+            title='Garbage URL Entry'), (
             'Entry which should have failed did not.')
 
-    @attr(online=True)
-    def test_irrelevant_url(self):
         #Test handling of a non-batoto url
         #Expected: Entry is skipped and left alone.
-        self.execute_task('irrelevanturl', options=dict(disable_phases=['output']))
-        assert self.task.find_entry(title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder'), (
+        assert self.task.find_entry(title='Irrelevant URL Entry'), (
             'Entry which should not have been modified was.')
 
 class TestBatotoRewriter(FlexGetBase):
