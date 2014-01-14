@@ -110,7 +110,7 @@ class TestBatotoRewriter(FlexGetBase):
 
           no_parser:
             mock:
-              - {title: 'WILDLY_INVALID_PARSER', url: 'http://www.batoto.net/comic/_/comics/bartender-r198'}
+              - {title: 'WILDLY_INVALID_PARSER', url: 'http://www.batoto.net/comic/_/comics/aqua-r1831'}
             accept_all: yes
             batoto: yes
 
@@ -157,8 +157,8 @@ class TestBatotoRewriter(FlexGetBase):
         #Expected: most recent upload is selected.
         self.execute_task('no_parser', options=dict(disable_phases=['download', 'output']))
         entry = self.task.find_entry(title='WILDLY_INVALID_PARSER')
-        #This will break with time. Change it to a long-dead series.
-        targeturl = 'http://www.batoto.net/read/_/215228/bartender_v14_ch106_by_cityshrimp'
+        #This could break with time, if the series receives a new upload. Aqua is unlikely to, but always possible.
+        targeturl = 'http://www.batoto.net/read/_/39350/aqua_v2_ch9_by_mangaone'
         assert entry['url'] == targeturl, ('Entry url is %s and should be %s' % (entry['url'], targeturl))
 
     @attr(online=True)
