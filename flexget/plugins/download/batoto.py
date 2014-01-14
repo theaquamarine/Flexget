@@ -274,7 +274,7 @@ class Batoto(object):
                 clean_title = h.unescape(clean_title)
                 clean_title = re.sub('[_.,\[\]\(\):]', ' ', clean_title)
                 parser.parse(clean_title)
-                log.debug('Got id: %s' % parser.pack_identifier)
+                #log.debug('Got id: %s' % parser.pack_identifier)
                 if parser.pack_identifier == entry.get('series_parser').pack_identifier:
                     log.debug('Chapter match: %s' % clean_title)
                 else: continue
