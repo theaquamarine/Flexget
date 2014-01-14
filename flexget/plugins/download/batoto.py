@@ -10,6 +10,7 @@ from BeautifulSoup import BeautifulSoup
 from flexget import plugin
 from flexget.event import event
 from flexget.utils.titles import ID_TYPES, SeriesParser
+from flexget.utils.tools import TimedDict
 
 log = logging.getLogger('batoto')
 
@@ -36,6 +37,9 @@ class Batoto(object):
 
     #This applies to all unexpected behaviour. Remember while troubleshooting.
     updatewarning = 'If this is unexpected, site may have changed. Plugin may require updating.'
+
+    def __init__(self):
+        self.cache = TimedDict(cache_time='1 hour')
 
     def on_task_start(self, task, config):
         newconfig = []
@@ -148,7 +152,6 @@ class Batoto(object):
 
                         newentry = copy(entry)
                         newentry['url'] = image
-                        del(newentry['original_url'])
                         newentry['title'] = ' '.join([seriesname, chaptername, 'page', filename])
                         newentry['path'] = entry.get('path')
                         newentry['filename'] = filename
@@ -207,11 +210,22 @@ class Batoto(object):
         """
 
         log.verbose('URL looks like a series page. Attempting to get %s' % entry.get('title'))
+        if entry['url'] in self.cache:
+            log.verbose('Using cached page for %s' % entry['url'])
+            text = self.cache[entry['url']]
+        else:
+            log.verbose('No cache exists for %s. Getting.' % entry['url'])
+            try:
+                r = requests.get(entry['url'])
+                if not urlparse(r.url)[2].startswith('/comic/_/comics/'):
+                    raise plugin.PluginError('Error getting page %s: Series may not exist at url.' % entry['url'])
+            except Exception as e:
+                entry.fail(unicode('Error finding chapters. ') + unicode(e))
+                raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
+            self.cache[entry['url']] = r.text
+            text = r.text
         try:
-            r = requests.get(entry['url'])
-            if not urlparse(r.url)[2].startswith('/comic/_/comics/'):
-                raise plugin.PluginError('Error getting page %s: Series may not exist at url.' % entry['url'])
-            soup = BeautifulSoup(r.text)
+            soup = BeautifulSoup(text)
             seriesname = soup.find('h1', 'ipsType_pagetitle').text
             rows = soup.find('table', 'chapters_list').findAll('tr','chapter_row')
         except plugin.PluginError as e:
@@ -301,6 +315,7 @@ class Batoto(object):
                 entry.fail(unicode(e))
                 raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
             entry['url'] = url
+            del(entry['original_url'])
 
 @event('plugin.register')
 def register_plugin():
