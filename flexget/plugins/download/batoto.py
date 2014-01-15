@@ -80,7 +80,6 @@ class Batoto(object):
     @plugin.priority(150)   #Needs to go before download@128
     def on_task_download(self, task, config):
 
-        haveworked = False
         finishedentries = []
 
         for entry in task.accepted:
@@ -133,7 +132,6 @@ class Batoto(object):
             #way to instruct download to append something to path?
             entry['path'] = join(entry.get('path'), chapterdir)
             #entry['subdir'] = chapterdir   #maybe?
-            haveworked = True
 
             #Prep pages for download
             if task.manager.options.test:
@@ -173,8 +171,6 @@ class Batoto(object):
                     entry.fail(unicode('Error finding page images. ') + unicode(e))
                     log.error(e)
                     continue
-        else:
-            if not haveworked: log.error('Encountered no batoto URLs.')
         seen = get_plugin_by_name('seen')
         for entry in finishedentries:
             seen.instance.learn(task, entry)
@@ -311,9 +307,11 @@ class Batoto(object):
             if self.language:
                 exitstring = exitstring + ' in %s' % self.language
                 entry.reject(unicode(exitstring))
-            else: entry.fail(unicode(exitstring))
+            else:
+                #Since we're not checking languages, not finding a chapter here is likely an issue.
+                entry.fail(unicode(exitstring))
+                raise plugin.PluginWarning(exitstring)
             log.debug(self.updatewarning)
-            raise plugin.PluginWarning(exitstring)
         else:
             try:
                 url = targetchapter.find('a')['href']
