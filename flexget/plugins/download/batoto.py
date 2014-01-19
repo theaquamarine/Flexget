@@ -41,6 +41,7 @@ class Batoto(object):
 
     def __init__(self):
         self.cache = TimedDict(cache_time='1 hour')
+        self.batotoloaded = False
 
     def on_task_start(self, task, config):
         newconfig = []
@@ -69,6 +70,12 @@ class Batoto(object):
             self.language = [language.title() for language in self.language]
             if 'Any' in self.language or 'None' in self.language: self.language = None
         log.debug('Language set to %s', self.language)
+
+        self.batotoloaded = True
+
+    def on_task_exit(self, task, config):
+        self.batotoloaded = False   #lets urlhandler tell if plugin is loaded for current task.
+        del self.language
 
     @plugin.priority(1)
     def on_task_input(self, task, config):
@@ -199,6 +206,8 @@ class Batoto(object):
         return actualtime
 
     def url_rewritable(self, task, entry):
+        #Test batoto is loaded for this task.
+        if not self.batotoloaded: return False
         url = urlparse(entry.get('url'))
         return url[1].endswith('batoto.net') and url[2].startswith('/comic/_/comics/')
 
