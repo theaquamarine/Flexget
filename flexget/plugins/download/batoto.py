@@ -6,7 +6,7 @@ from urlparse import urlparse
 from datetime import datetime, timedelta
 from copy import copy
 import requests
-from BeautifulSoup import BeautifulSoup
+from bs4 import BeautifulSoup
 from flexget import plugin
 from flexget.event import event
 from flexget.utils.titles import ID_TYPES, SeriesParser
@@ -72,10 +72,12 @@ class Batoto(object):
         log.debug('Language set to %s', self.language)
 
         self.batotoloaded = True
+        self.pages = {}
 
     def on_task_exit(self, task, config):
         self.batotoloaded = False   #lets urlhandler tell if plugin is loaded for current task.
         del self.language
+        self.pages = {}
 
     @plugin.priority(1)
     def on_task_input(self, task, config):
@@ -86,9 +88,6 @@ class Batoto(object):
 
     @plugin.priority(150)   #Needs to go before download@128
     def on_task_download(self, task, config):
-
-        finishedentries = []
-
         for entry in task.accepted:
             url = entry.get('url')
             if not urlparse(url)[1].endswith('batoto.net'):
@@ -137,6 +136,8 @@ class Batoto(object):
             #Really don't like this- requires path to be set beforehand
             #Making path an argument for plugin doesn't really seem appropriate.
             #way to instruct download to append something to path?
+            #TODO: GET A PATH
+            entry['path'] = 'C:\\Users\\blue\\Work\\batoto'
             entry['path'] = join(entry.get('path'), chapterdir)
             #entry['subdir'] = chapterdir   #maybe?
 
@@ -146,7 +147,8 @@ class Batoto(object):
                 #log.debug(pages)
             else:
                 log.info('Prepping pages of ' + seriesname + ' ' + chaptername + ' - This might take a while!')
-                newentries = []
+                files = []
+                download = get_plugin_by_name('download').instance
                 try:
                     for page in pages:
                         #Avoid getting the first page twice if we can
@@ -159,15 +161,12 @@ class Batoto(object):
                         filename = basename(image).replace('img','')
 
                         newentry = copy(entry)
+                        newentry['title'] = entry['title'] + ' ' + filename
                         newentry['url'] = image
-                        newentry['title'] = ' '.join([seriesname, chaptername, 'page', filename])
-                        newentry['path'] = entry.get('path')
-                        newentry['filename'] = filename
-                        newentry['description'] = 'A page of %s' % entry['title']
-                        newentry.accept()
-                        newentries.append(newentry)
-                    task.all_entries.extend(newentries)
-                    finishedentries.append(entry)
+                        download.get_temp_file(task, newentry, fail_html=False)
+                        file = newentry['file'], newentry['filename']
+                        files.append(file)
+                    self.pages[entry['title']] = files
                 except (AttributeError, TypeError) as e:
                     log.error('Encountered an error finding page images in chapter. Site could have been changed, ' +
                         'plugin update may be required.')
@@ -178,10 +177,23 @@ class Batoto(object):
                     entry.fail(unicode('Error finding page images. ') + unicode(e))
                     log.error(e)
                     continue
-        seen = get_plugin_by_name('seen')
-        for entry in finishedentries:
-            seen.instance.learn(task, entry)
-            task.all_entries.remove(entry)
+
+    def on_task_output(self, task, config):
+        download = get_plugin_by_name('download').instance
+        for entry in task.accepted:
+            pages = self.pages[entry['title']]
+            log.debug('In output. Pages = %s' % pages)
+            try:
+                for file, filename in pages:
+                    newentry = copy(entry)
+                    newentry['file'] = file
+                    newentry['filename'] = filename
+                    download.output(task, newentry, {'path': entry.get('path')})
+                    log.debug(newentry['output'])
+                entry['output'] = entry['path']
+            except (plugin.PluginError, plugin.PluginWarning) as e:
+                log.error(e)
+                entry.fail(e)
 
     def string_to_time(self, timestring):
         """
@@ -225,7 +237,7 @@ class Batoto(object):
             log.verbose('Using cached page for %s' % entry['url'])
             text = self.cache[entry['url']]
         else:
-            if not task.options.nocache: log.verbose('No cache exists for %s. Getting.' % entry['url'])
+            if not task.options.nocache: log.verbose('No cache exists for %s. Getting online.' % entry['url'])
             try:
                 r = requests.get(entry['url'])
                 if not urlparse(r.url)[2].startswith('/comic/_/comics/'):
