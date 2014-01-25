@@ -33,6 +33,7 @@ class TestBatoto(FlexGetBase):
           - {title: 'Irrelevant URL Entry',
                 url: 'http://www.google.com'}
         accept_all: yes
+        disable_builtins: [retry_failed]
         batoto: English
     """
 
