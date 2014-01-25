@@ -131,6 +131,8 @@ class TestBatotoRewriter(FlexGetBase):
           garbage_series:
             mock:
               - {title: 'Nichijou Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/ddddddddddddddddddddddddddd'}
+            disable_builtins: [retry_failed]
+            batoto: yes
             accept_all: yes
     """
 
