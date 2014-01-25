@@ -203,7 +203,7 @@ class Batoto(object):
         switching to absolute time, so this should never happen.
         """
 
-        timestring = timestring.replace('[A]', '')
+        timestring = timestring.replace(' [A]', '')
         if timestring.find('ago') != -1:
             value, unit, direction = timestring.split()
             if value.lower() == 'a' or value.lower() == 'an': value = float(1)
