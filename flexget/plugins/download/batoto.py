@@ -59,6 +59,8 @@ class Batoto(object):
                             'accepted for it.') % seriesitem)
                     if not any(properties.get(id_type + '_regexp') for id_type in ID_TYPES):
                         properties.update({'sequence_regexp': seqregexp})
+                        if not 'identified_by' in properties:
+                            properties.update({'identified_by': 'sequence'})
                         log.debug('Adding sequence regex to series \'%s\'' % seriesitem)
                     series[seriesitem] = properties
                 newconfig.append(series)
