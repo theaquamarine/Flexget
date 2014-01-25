@@ -293,21 +293,21 @@ class TestBatotoSetup(FlexGetBase):
         #Offline version with stored title string?
 
     def test_language_bool(self):
-        self.execute_task('language_bool', options=dict(disable_phases=['download', 'output']))
+        self.execute_task('language_bool', options=dict(disable_phases=['download', 'output', 'exit']))
         batoto = get_plugin_by_name('batoto')
         expectedlanguages = None
         assert batoto.instance.language == expectedlanguages, ('Language should be set to \'None\' but is %s' %
                                                     batoto.instance.language)
 
     def test_language_string(self):
-        self.execute_task('language_string', options=dict(disable_phases=['download', 'output']))
+        self.execute_task('language_string', options=dict(disable_phases=['download', 'output', 'exit']))
         batoto = get_plugin_by_name('batoto')
         expectedlanguages = ['English', 'French']
         assert batoto.instance.language == expectedlanguages, ('Language should be set to %s but is %s' %
                                                                 (expectedlanguages, batoto.instance.language))
 
     def test_language_nullify(self):
-        self.execute_task('language_nullify', options=dict(disable_phases=['download', 'output']))
+        self.execute_task('language_nullify', options=dict(disable_phases=['download', 'output', 'exit']))
         batoto = get_plugin_by_name('batoto')
         expectedlanguages = None
         assert batoto.instance.language == expectedlanguages, ('Language should be set to %s but is %s' %
