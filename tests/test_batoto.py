@@ -137,6 +137,7 @@ class TestBatotoRewriter(FlexGetBase):
         entry = self.task.find_entry(title='Bartender - English - Vol.14 Ch.106: Undesirable Guests (Part 3)')
         targeturl = 'http://www.batoto.net/read/_/215228/bartender_v14_ch106_by_cityshrimp'
         assert entry['url'] == targeturl, ('Entry url is %s and should be %s' % (entry['url'], targeturl))
+        assert entry['series_parser'].pack_identifier == 106
 
     @attr(online=True)
     def test_chapter_match_temp_parser(self):
