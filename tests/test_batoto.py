@@ -46,9 +46,8 @@ class TestBatoto(FlexGetBase):
 
         #Test language matching
         #Expected: accepts chapters matching language, fails others.
-        assert self.task.find_entry(category='accepted',
-            title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder'), (
-            'Language which should have been accepted was not.')
+        entry = self.task.find_entry(category='accepted', title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder')
+        assert entry, 'Language which should have been accepted was not.'
         assert self.task.find_entry(category='rejected',
             description='Arakawa Under the Bridge Vol.1 Ch.2: Bajo el puente de la Gran Estrella'), (
             'Language which should have been rejected was not.')
@@ -58,12 +57,19 @@ class TestBatoto(FlexGetBase):
         batoto = get_plugin_by_name('batoto').instance
         print batoto.pages['Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder']
         assert len(batoto.pages['Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder']) == 3, 'Wrong number of pages'
+        assert entry['pages'] == 3, 'Wrong number of pages in entry[\'pages\']'
 
         #Test parsing chapter page to get series name
         #Expected: accurate series name
+        assert entry['batoto_series'] == 'Arakawa Under the Bridge', 'Incorrect series name in entry'
 
         #Test parsing chapter page to get chapter name
         #Expected: accurate chapter name
+        assert entry['chapter_name'] == 'Vol.8 Ch.X-8- Distant Thunder', 'Incorrect chapter name in entry'
+
+        #Test parsing chapter page to get group name
+        #Expected: accurate group name
+        assert entry['group'] == 'Slowmanga', 'Incorrect group name in entry'
 
     @attr(online=True)
     def test_invalid_urls(self):
