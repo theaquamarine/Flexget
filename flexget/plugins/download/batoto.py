@@ -1,7 +1,7 @@
 import HTMLParser
 import re
 import logging
-from os.path import basename, join
+from os.path import basename, expanduser
 from urlparse import urlparse
 from datetime import datetime, timedelta
 from copy import copy
@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 from flexget import plugin
 from flexget.event import event
+from flexget.utils.template import RenderError
 from flexget.utils.titles import ID_TYPES, SeriesParser
 from flexget.utils.tools import TimedDict
 from flexget.plugin import get_plugin_by_name
@@ -22,18 +23,31 @@ class Batoto(object):
     """
     Scrapes comics from batoto.net.
 
-    Accepts either chapter pages (from myfollows_rss) and series pages (from recent_rss).
+    Accepts either chapter pages (from myfollows_rss) and series pages (from recent_rss, via a url rewriter)..
 
     Adds a sequence_regexp to all series which have no other *regexps to enable parsing of batoto's titles. Strips the
     phrase 'read online' from `title` and `description`.
 
-    Creates a pre-accepted entry for each page in accepted comics and removes the entry representing the entire comic,
-    to prevent invalid entry failure errors when attempting to download the html chapter page.
+    Downloads pages of accepted comics to a directory `path`, supporting Jinja templating. Optionally filters releases
+    by language, using the `language` setting. Provides the following fields in entries: language, batoto_series,
+    chapter_id, chapter_title, 'volume_number, chapter_number, chapter_name, group, pages.
+    language = language of release, batoto_series = series name as set on site, chapter_id = combined volume & chapter,
+    chapter_name = combined chapter_id and chapter_title, group = release group, pages = number of pages.
+
+    Examples:
+        batoto: ~/comics/{{batoto_series}}/{{chapter_name}}
+
+        batoto:
+          path: ~/comics/{{batoto_series}}/{{chapter_name}}
+          language: english
     """
 
     schema = {'oneOf': [
-                {'type': 'boolean', 'enum': [True]},
-                {'title': 'language', 'type': 'string'}
+                {'type': 'string', 'format': 'path'},
+                {'type': 'object', 'properties': {
+                    'path': {'type': 'string', 'format': 'path'},
+                    'language': {'type': 'string'}
+                }}
             ]}
 
     #This applies to all unexpected behaviour. Remember while troubleshooting.
@@ -66,11 +80,14 @@ class Batoto(object):
                 newconfig.append(series)
             task.config['series'] = newconfig
 
-        if isinstance(config, bool): self.language = None
-        else:
-            self.language = config.split(' ')
+        if isinstance(config, dict) and 'language' in config:
+        # if isinstance(config, bool): self.language = None
+        # else:
+            self.language = config['language'].split(' ')
             self.language = [language.title() for language in self.language]
             if 'Any' in self.language or 'None' in self.language: self.language = None
+        else:
+            self.language = None
         log.debug('Language set to %s', self.language)
 
         self.batotoloaded = True
@@ -88,8 +105,10 @@ class Batoto(object):
             if entry.get('title'): entry['title'] = entry.get('title').replace('Read Online','').strip()
             entry['description'] = entry.get('title')
 
-    @plugin.priority(150)   #Needs to go before download@128
     def on_task_download(self, task, config):
+        if isinstance(config, basestring): config = {'path': config}
+        path = config['path']
+
         for entry in task.accepted:
             url = entry.get('url')
             if not urlparse(url)[1].endswith('batoto.net'):
@@ -109,7 +128,7 @@ class Batoto(object):
                 entry.fail(unicode('URL is not a chapter page.'))
                 continue
 
-            #Get chapter pages & info
+            #Get chapter pages & info, attach to entry for jinja.
             h = HTMLParser.HTMLParser()
             try:
                 soup = BeautifulSoup(r.text)
@@ -118,10 +137,24 @@ class Batoto(object):
                 if self.language and language not in self.language:
                     entry.reject(unicode('Chapter does not match required language.'))
                     continue
+                entry['language'] = language
                 seriesname = h.unescape(soup.find('div', 'moderation_bar').find('a').text.replace(':','-'))
+                entry['batoto_series'] = seriesname    #could use a better name.
                 chaptername = h.unescape(soup.find('select', {'name':'chapter_select'}).
-                    find('option', {'selected':'selected'}).text.replace(':','-'))
+                    find('option', {'selected':'selected'}).text)
+                chaptersplit = chaptername.split(':', 1)
+                entry['chapter_id'] = chaptersplit[0].strip()
+                entry['chapter_title'] = chaptersplit[1].strip()
+                chaptersplit = entry['chapter_id'].split('Ch.', 1)
+                log.debug(chaptersplit)
+                entry['volume_number'] = chaptersplit[0].replace('Vol.', '').strip()
+                entry['chapter_number'] = chaptersplit[1]
+                chaptername = chaptername.replace(':','-')
+                entry['chapter_name'] = chaptername
+                entry['group'] = soup.find('select', {'name':'group_select'}).find('option', {'selected':'selected'})\
+                    .text.replace(' - ' + language, '')
                 pages = soup.find('select', {'name':'page_select'}).findAll('option')
+                entry['pages'] = len(pages)
             except (AttributeError, TypeError) as e:
                 log.error('Encountered an error finding details on chapter page. Site could have been changed, ' +
                     'plugin update may be required.')
@@ -132,16 +165,14 @@ class Batoto(object):
                 continue
             log.verbose(seriesname + ' ' + chaptername + ': ' + str(len(pages)) + ' pages')
 
-            #customization a la set would be nice here.
-            chapterdir = entry.get('filename', join(seriesname, chaptername))
-            log.verbose('Saving to ' + chapterdir)
-            #Really don't like this- requires path to be set beforehand
-            #Making path an argument for plugin doesn't really seem appropriate.
-            #way to instruct download to append something to path?
-            #TODO: GET A PATH
-            entry['path'] = 'C:\\Users\\blue\\Work\\batoto'
-            entry['path'] = join(entry.get('path'), chapterdir)
-            #entry['subdir'] = chapterdir   #maybe?
+            if not path in entry: entry['path'] = path
+            # expand variables in path
+            try:
+                entry['path'] = expanduser(entry.render(entry['path']))
+            except RenderError as e:
+                entry.fail('Could not set path. Error during string replacement: %s' % e)
+                continue
+            log.verbose('Saving to ' + entry['path'])
 
             #Prep pages for download
             if task.manager.options.test:
@@ -183,19 +214,22 @@ class Batoto(object):
     def on_task_output(self, task, config):
         download = get_plugin_by_name('download').instance
         for entry in task.accepted:
-            pages = self.pages[entry['title']]
-            log.debug('In output. Pages = %s' % pages)
-            try:
-                for file, filename in pages:
-                    newentry = copy(entry)
-                    newentry['file'] = file
-                    newentry['filename'] = filename
-                    download.output(task, newentry, {'path': entry.get('path')})
-                    log.debug(newentry['output'])
-                entry['output'] = entry['path']
-            except (plugin.PluginError, plugin.PluginWarning) as e:
-                log.error(e)
-                entry.fail(e)
+            if not task.options.test:
+                pages = self.pages[entry['title']]
+                log.debug('In output. Pages = %s' % pages)
+                try:
+                    for file, filename in pages:
+                        newentry = copy(entry)
+                        newentry['file'] = file
+                        newentry['filename'] = filename
+                        download.output(task, newentry, {'path': entry.get('path')})
+                        log.debug(newentry['output'])
+                    entry['output'] = entry['path']
+                except (plugin.PluginError, plugin.PluginWarning) as e:
+                    log.error(e)
+                    entry.fail(e)
+            else:
+                log.info('Would write %s to %s' % (entry['title'], entry.get('path')))
 
     def string_to_time(self, timestring):
         """
@@ -251,7 +285,7 @@ class Batoto(object):
             text = r.text
         try:
             soup = BeautifulSoup(text)
-            seriesname = soup.find('h1', 'ipsType_pagetitle').text
+            seriesname = soup.find('h1', 'ipsType_pagetitle').text.strip()
             rows = soup.find('table', 'chapters_list').findAll('tr','chapter_row')
         except plugin.PluginError as e:
             entry.fail(unicode(e))
@@ -294,7 +328,7 @@ class Batoto(object):
                     chapterlanguage = self.language.index(language)
             tds = row.findAll('td')
             if parser:
-                clean_title = seriesname + ' ' + tds[0].text
+                clean_title = seriesname + ' ' + tds[0].text.strip()
                 clean_title = h.unescape(clean_title)
                 clean_title = re.sub('[_.,\[\]\(\):]', ' ', clean_title)
                 parser.parse(clean_title)
