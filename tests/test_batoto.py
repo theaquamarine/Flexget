@@ -1,6 +1,5 @@
 from __future__ import unicode_literals, division, absolute_import
 from datetime import datetime, timedelta
-from itertools import izip_longest
 from nose.plugins.attrib import attr
 from tests import FlexGetBase
 from flexget.utils.titles import ID_TYPES
@@ -20,7 +19,9 @@ class TestBatoto(FlexGetBase):
           - {title: 'Arakawa Under the Bridge Vol.1 Ch.2: Bajo el puente de la Gran Estrella',
                 url: 'http://www.batoto.net/read/_/167114/arakawa-under-the-bridge_v1_ch2_by_majo-no-fansub'}
         accept_all: yes
-        batoto: English
+        batoto:
+         language: English
+         path: '~'
 
       urltests:
         set:
@@ -34,7 +35,9 @@ class TestBatoto(FlexGetBase):
                 url: 'http://www.google.com'}
         accept_all: yes
         disable_builtins: [retry_failed]
-        batoto: English
+        batoto:
+          language: English
+          path: '~'
     """
 
     @attr(online=True)
@@ -93,39 +96,43 @@ class TestBatotoRewriter(FlexGetBase):
                     url: 'http://www.batoto.net/comic/_/comics/bartender-r198'}
             series:
               - bartender
-            batoto: yes
+            batoto: '~'
 
           temp_parser:
             mock:
               - {title: 'Bartender - English - Vol.14 Ch.106: Undesirable Guests (Part 3)',
                     url: 'http://www.batoto.net/comic/_/comics/bartender-r198'}
             accept_all: yes
-            batoto: yes
+            batoto: '~'
 
           no_parser:
             mock:
               - {title: 'WILDLY_INVALID_PARSER', url: 'http://www.batoto.net/comic/_/comics/aqua-r1831'}
             accept_all: yes
-            batoto: yes
+            batoto: '~'
 
           match_multiple:
             mock:
               - {title: 'D-FRAG Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/d-frag-r444'}
             accept_all: yes
-            batoto: English
+            batoto:
+              language: English
+              path: '~'
 
           match_lang:
             mock:
               - {title: 'Nichijou Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/nichijou-r188'}
             series:
               - nichijou
-            batoto: German English Italian
+            batoto:
+              language: German English Italian
+              path: '~'
 
           garbage_series:
             mock:
               - {title: 'Nichijou Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/ddddddddddddddddddddddddddd'}
             disable_builtins: [retry_failed]
-            batoto: yes
+            batoto: '~'
             accept_all: yes
     """
 
@@ -195,7 +202,7 @@ class TestBatotoSetup(FlexGetBase):
           testdata:
             set:
               path: 'C:\'
-            batoto: yes
+            batoto: '~'
             mock:
               - {title: 'Bartender - English - Vol.14 Ch.106: Undesirable Guests (Part 3)',
                     url: 'http://www.batoto.net/read/_/215228/bartender_v14_ch106'}
@@ -230,13 +237,17 @@ class TestBatotoSetup(FlexGetBase):
               - nichijou: {id_regexp: 'Ch[\.\s](\d+(?:.*short \d+)?)'}
 
           language_bool:
-            batoto: yes
+            batoto: '~'
 
           language_string:
-            batoto: english french
+            batoto:
+              path: '~'
+              language: english french
 
           language_nullify:
-            batoto: english french any
+            batoto:
+              path: '~'
+              language: english french any
     """
 
     def test_load_regex_simple(self):
@@ -315,7 +326,7 @@ class TestStringtoTime(FlexGetBase):
     __yaml__ = """
         tasks:
           stringtotime:
-            batoto: yes
+            batoto: '~'
     """
 
     def test_string_to_time(self):
