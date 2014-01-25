@@ -81,8 +81,6 @@ class Batoto(object):
             task.config['series'] = newconfig
 
         if isinstance(config, dict) and 'language' in config:
-        # if isinstance(config, bool): self.language = None
-        # else:
             self.language = config['language'].split(' ')
             self.language = [language.title() for language in self.language]
             if 'Any' in self.language or 'None' in self.language: self.language = None
@@ -108,6 +106,7 @@ class Batoto(object):
     def on_task_download(self, task, config):
         if isinstance(config, basestring): config = {'path': config}
         path = config['path']
+        #Warn if path is static so will result in all images being dumped in one place?
 
         for entry in task.accepted:
             url = entry.get('url')
@@ -166,12 +165,6 @@ class Batoto(object):
             log.verbose(seriesname + ' ' + chaptername + ': ' + str(len(pages)) + ' pages')
 
             if not path in entry: entry['path'] = path
-            # expand variables in path
-            try:
-                entry['path'] = expanduser(entry.render(entry['path']))
-            except RenderError as e:
-                entry.fail('Could not set path. Error during string replacement: %s' % e)
-                continue
             log.verbose('Saving to ' + entry['path'])
 
             #Prep pages for download
@@ -214,6 +207,12 @@ class Batoto(object):
     def on_task_output(self, task, config):
         download = get_plugin_by_name('download').instance
         for entry in task.accepted:
+            # expand variables in path
+            try:
+                entry['path'] = expanduser(entry.render(entry['path']))
+            except RenderError as e:
+                entry.fail('Could not set path. Error during string replacement: %s' % e)
+                continue
             if not task.options.test:
                 pages = self.pages[entry['title']]
                 log.debug('In output. Pages = %s' % pages)
