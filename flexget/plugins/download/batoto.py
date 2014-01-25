@@ -285,8 +285,7 @@ class Batoto(object):
         for row in rows:
             #Reject anything we can on language & series info
             if self.language:
-                classes = row['class'].split(' ')
-                language = [language for language in self.language if 'lang_' + language in classes]
+                language = [language for language in self.language if 'lang_' + language in row['class']]
                 if not language: continue
                 else:
                     language = language[0]
