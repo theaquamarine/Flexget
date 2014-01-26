@@ -177,6 +177,10 @@ class Batoto(object):
             if not path in entry: entry['path'] = path
             log.verbose('Saving to ' + entry['path'])
 
+            #Should test if filename varies per page, to avoid collsions?
+            #At the moment, results in first page being downloaded to $filename then entry being failed with
+            #$filename already exists and is not identical.
+
             #Prep pages for download
             if task.manager.options.test:
                 log.info('Would prep pages of ' + seriesname + ' ' + chaptername)
@@ -210,7 +214,6 @@ class Batoto(object):
 
                         download.get_temp_file(task, newentry, fail_html=False)
                         file = newentry['file'], newentry['filename']
-                        log.debug(file)
                         files.append(file)
                     self.pages[entry['title']] = files
                 except (AttributeError, TypeError) as e:
@@ -239,11 +242,15 @@ class Batoto(object):
                 try:
                     for file, filename in pages:
                         newentry = copy(entry)
+                        newentry['title'] = filename
                         newentry['file'] = file
                         newentry['filename'] = filename
-                        newentry['filename'] = newentry.render(newentry['filename'])
                         download.output(task, newentry, {'path': entry.get('path')})
-                        log.debug(newentry['output'])
+                        if 'output' in newentry:
+                            log.debug('Saved %s to %s' % (newentry['filename'], newentry['output']))
+                        if newentry.failed:
+                            entry.fail(newentry['reason'])
+                            break
                     entry['output'] = entry['path']
                 except (plugin.PluginError, plugin.PluginWarning) as e:
                     log.error(e)
