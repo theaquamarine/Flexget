@@ -1,7 +1,7 @@
 import HTMLParser
 import re
 import logging
-from os.path import basename, expanduser
+from os.path import basename, expanduser, splitext
 from urlparse import urlparse
 from datetime import datetime, timedelta
 from copy import copy
@@ -30,24 +30,35 @@ class Batoto(object):
 
     Downloads pages of accepted comics to a directory `path`, supporting Jinja templating. Optionally filters releases
     by language, using the `language` setting. Provides the following fields in entries: language, batoto_series,
-    chapter_id, chapter_title, 'volume_number, chapter_number, chapter_name, group, pages.
+    chapter_id, chapter_title, volume_number, chapter_number, chapter_name, group, pages.
     language = language of release, batoto_series = series name as set on site, chapter_id = combined volume & chapter,
     chapter_name = combined chapter_id and chapter_title, group = release group, pages = number of pages.
 
+    Page file names can be specified using the `filename` setting, which supports all the previous fields for jinja, as
+    well as page_number and extension.
+
+    `Path` is a required setting, `language` defaults to none (ie all languages accepted) and `filename` defaults to
+    {{path_number}}{{extension}} if unspecified.
+
     Examples:
-        batoto: ~/comics/{{batoto_series}}/{{chapter_name}}
+        batoto: '~/comics/{{batoto_series}}/{{chapter_name}}'
 
         batoto:
-          path: ~/comics/{{batoto_series}}/{{chapter_name}}
+          path: '~/comics/{{batoto_series}}/{{chapter_name}}'
           language: english
+          filename: '{{batoto_series}}-v{{volume_number}}-c{{chapter_number}}-p{{page_number}}{{extension}}'
     """
 
     schema = {'oneOf': [
                 {'type': 'string', 'format': 'path'},
                 {'type': 'object', 'properties': {
                     'path': {'type': 'string', 'format': 'path'},
-                    'language': {'type': 'string'}
-                }}
+                    'language': {'type': 'string'},
+                    'filename': {'type': 'string'}
+                    },
+                'required': ['path'],
+                'additionalProperties': False
+                }
             ]}
 
     #This applies to all unexpected behaviour. Remember while troubleshooting.
@@ -145,7 +156,6 @@ class Batoto(object):
                 entry['chapter_id'] = chaptersplit[0].strip()
                 entry['chapter_title'] = chaptersplit[1].strip()
                 chaptersplit = entry['chapter_id'].split('Ch.', 1)
-                log.debug(chaptersplit)
                 entry['volume_number'] = chaptersplit[0].replace('Vol.', '').strip()
                 entry['chapter_number'] = chaptersplit[1]
                 chaptername = chaptername.replace(':','-')
@@ -189,8 +199,18 @@ class Batoto(object):
                         newentry = copy(entry)
                         newentry['title'] = entry['title'] + ' ' + filename
                         newentry['url'] = image
+                        newentry['page_number'], newentry['extension'] = splitext(filename)
+                        if not 'filename' in newentry:
+                            if 'filename' in config:
+                                newentry['filename'] = config['filename']
+                            else:
+                                newentry['filename'] = filename
+                        if isinstance(newentry.get('filename'), basestring):
+                            newentry['filename'] = newentry.render(newentry.get('filename'))
+
                         download.get_temp_file(task, newentry, fail_html=False)
                         file = newentry['file'], newentry['filename']
+                        log.debug(file)
                         files.append(file)
                     self.pages[entry['title']] = files
                 except (AttributeError, TypeError) as e:
@@ -221,6 +241,7 @@ class Batoto(object):
                         newentry = copy(entry)
                         newentry['file'] = file
                         newentry['filename'] = filename
+                        newentry['filename'] = newentry.render(newentry['filename'])
                         download.output(task, newentry, {'path': entry.get('path')})
                         log.debug(newentry['output'])
                     entry['output'] = entry['path']
@@ -374,7 +395,7 @@ class Batoto(object):
                 entry.fail(unicode(e))
                 raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
             entry['url'] = url
-            del(entry['original_url'])
+            entry['original_url'] = url
 
 @event('plugin.register')
 def register_plugin():
