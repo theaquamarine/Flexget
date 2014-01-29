@@ -154,7 +154,9 @@ class Batoto(object):
                     find('option', {'selected':'selected'}).text)
                 chaptersplit = chaptername.split(':', 1)
                 entry['chapter_id'] = chaptersplit[0].strip()
-                entry['chapter_title'] = chaptersplit[1].strip()
+                if len(chaptersplit) < 1:
+                    entry['chapter_title'] = chaptersplit[1].strip()
+                else: entry['chapter_title'] = ''
                 chaptersplit = entry['chapter_id'].split('Ch.', 1)
                 entry['volume_number'] = chaptersplit[0].replace('Vol.', '').strip()
                 entry['chapter_number'] = chaptersplit[1]
