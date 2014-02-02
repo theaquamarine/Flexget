@@ -99,12 +99,23 @@ class Batoto(object):
             self.language = None
         log.debug('Language set to %s', self.language)
 
+        #Saves us doing language filtering on series pages.
+        if self.language:
+            self.languagecookie = {'lang_option': '%3B'.join(self.language)} #urlencoded semicolon
+        else: self.languagecookie = None
+
+        #if we're supposed to be filtering by language, ensure rss is filtering if it can be.
+        #if rss in config and rss url is myfollows_rss
+        #   if rss url doesn't have language set and batoto does
+        #   rss url = rss url + '&l=' + ';'.join(self.language)
+
         self.batotoloaded = True
         self.pages = {}
 
     def on_task_exit(self, task, config):
         self.batotoloaded = False   #lets urlhandler tell if plugin is loaded for current task.
         del self.language
+        del self.languagecookie
         self.pages = {}
 
     @plugin.priority(1)
@@ -304,7 +315,7 @@ class Batoto(object):
         else:
             if not task.options.nocache: log.verbose('No cache exists for %s. Getting online.' % entry['url'])
             try:
-                r = requests.get(entry['url'])
+                r = requests.get(entry['url'], cookies = self.languagecookie)
                 if not urlparse(r.url)[2].startswith('/comic/_/comics/'):
                     raise plugin.PluginError('Error getting page %s: Series may not exist at url.' % entry['url'])
             except Exception as e:
@@ -346,15 +357,8 @@ class Batoto(object):
         h = HTMLParser.HTMLParser()
         targetchapter = None
         targettime = None
-        targetlanguage = None
         for row in rows:
-            #Reject anything we can on language & series info
-            if self.language:
-                language = [language for language in self.language if 'lang_' + language in row['class']]
-                if not language: continue
-                else:
-                    language = language[0]
-                    chapterlanguage = self.language.index(language)
+            #Reject anything we can on series info
             tds = row.findAll('td')
             if parser:
                 clean_title = seriesname + ' ' + tds[0].text.strip()
@@ -368,24 +372,11 @@ class Batoto(object):
 
             #See if anything left is a better match than we have
             chaptertime = self.string_to_time(tds[-1].text)
-            if self.language:
-                log.debug('Chapter language: %s, priority %s' % (language, chapterlanguage))
-                if targetlanguage is not None: log.debug('Chapter conflict: %s(%s) vs %s(%s)'
-                    % (language, chapterlanguage, self.language[targetlanguage], targetlanguage))
-                if targetlanguage is None or chapterlanguage < targetlanguage:
-                    #lower = listed sooner = higher priority
-                    targetlanguage = chapterlanguage
-                    targetchapter = row
-                    targettime = chaptertime
-                    continue
-                elif chapterlanguage == targetlanguage: pass
-                else: continue
             log.debug('Chapter time: %s' % chaptertime)
             if targettime is not None: log.debug('Chapter conflict: %s vs %s' % (chaptertime, targettime))
             if targettime is None or chaptertime > targettime:
                 targetchapter = row
                 targettime = chaptertime
-                if self.language: targetlanguage = chapterlanguage
         if temp_parser: del entry['series_parser']
         if not targetchapter:
             exitstring = 'Unable to find chapter %s' % entry.get('title')
