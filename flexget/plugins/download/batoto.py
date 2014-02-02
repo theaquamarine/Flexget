@@ -153,19 +153,15 @@ class Batoto(object):
             h = HTMLParser.HTMLParser()
             try:
                 soup = BeautifulSoup(r.text)
-                language = basename(soup.find('select', {'name':'group_select'}).
-                    find('option', {'selected':'selected'})['value'])
-                if self.language and language not in self.language:
-                    entry.reject(unicode('Chapter does not match required language.'))
-                    continue
-                entry['language'] = language
+                entry['language'] = basename(soup.find('select', {'name':'group_select'}).find('option',
+                    {'selected':'selected'})['value'])
                 seriesname = h.unescape(soup.find('div', 'moderation_bar').find('a').text.replace(':','-'))
                 entry['batoto_series'] = seriesname    #could use a better name.
                 chaptername = h.unescape(soup.find('select', {'name':'chapter_select'}).
                     find('option', {'selected':'selected'}).text)
                 chaptersplit = chaptername.split(':', 1)
                 entry['chapter_id'] = chaptersplit[0].strip()
-                if len(chaptersplit) < 1:
+                if len(chaptersplit) > 1:
                     entry['chapter_title'] = chaptersplit[1].strip()
                 else: entry['chapter_title'] = ''
                 chaptersplit = entry['chapter_id'].split('Ch.', 1)
@@ -173,8 +169,8 @@ class Batoto(object):
                 entry['chapter_number'] = chaptersplit[1]
                 chaptername = chaptername.replace(':','-')
                 entry['chapter_name'] = chaptername
-                entry['group'] = soup.find('select', {'name':'group_select'}).find('option', {'selected':'selected'})\
-                    .text.replace(' - ' + language, '')
+                entry['group'] = ' - '.join(soup.find('select', {'name':'group_select'}).find('option',
+                    {'selected':'selected'}).text.split(' - ')[:-1])    #in case a group has ' - ' in name.
                 pages = soup.find('select', {'name':'page_select'}).findAll('option')
                 entry['pages'] = len(pages)
             except (AttributeError, TypeError) as e:
