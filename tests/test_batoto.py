@@ -16,8 +16,6 @@ class TestBatoto(FlexGetBase):
         mock:
           - {title: 'Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder',
                 url: 'http://www.batoto.net/read/_/62326/arakawa-under-the-bridge_v8_chx-8_by_slowmanga'}
-          - {title: 'Arakawa Under the Bridge Vol.1 Ch.2: Bajo el puente de la Gran Estrella',
-                url: 'http://www.batoto.net/read/_/167114/arakawa-under-the-bridge_v1_ch2_by_majo-no-fansub'}
         accept_all: yes
         batoto:
          language: English
@@ -48,9 +46,6 @@ class TestBatoto(FlexGetBase):
         #Expected: accepts chapters matching language, fails others.
         entry = self.task.find_entry(category='accepted', title='Arakawa Under the Bridge Vol.8 Ch.X-8: Distant Thunder')
         assert entry, 'Language which should have been accepted was not.'
-        assert self.task.find_entry(category='rejected',
-            description='Arakawa Under the Bridge Vol.1 Ch.2: Bajo el puente de la Gran Estrella'), (
-            'Language which should have been rejected was not.')
 
         #Test collection of pages from chapter
         #Expected: Correct number of pages
@@ -317,6 +312,7 @@ class TestBatotoSetup(FlexGetBase):
         self.execute_task('language_string', options=dict(disable_phases=['download', 'output', 'exit']))
         batoto = get_plugin_by_name('batoto')
         expectedlanguages = ['English', 'French']
+        expectedlanguages = '%3B'.join(expectedlanguages)
         assert batoto.instance.language == expectedlanguages, ('Language should be set to %s but is %s' %
                                                                 (expectedlanguages, batoto.instance.language))
 

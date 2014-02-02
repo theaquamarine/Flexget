@@ -2,7 +2,7 @@ import HTMLParser
 import re
 import logging
 from os.path import basename, expanduser, splitext
-from urlparse import urlparse
+from urlparse import urlsplit, urlunsplit
 from datetime import datetime, timedelta
 from copy import copy
 import requests
@@ -101,13 +101,25 @@ class Batoto(object):
 
         #Saves us doing language filtering on series pages.
         if self.language:
-            self.languagecookie = {'lang_option': '%3B'.join(self.language)} #urlencoded semicolon
-        else: self.languagecookie = None
+            self.language = '%3B'.join(self.language) #urlencoded semicolon
 
         #if we're supposed to be filtering by language, ensure rss is filtering if it can be.
-        #if rss in config and rss url is myfollows_rss
-        #   if rss url doesn't have language set and batoto does
-        #   rss url = rss url + '&l=' + ';'.join(self.language)
+        if task.config.get('rss'):
+            if isinstance(task.config['rss'], dict):
+                rssurl = task.config['rss'].get('url')
+            elif isinstance(task.config['rss'], basestring):
+                rssurl = task.config['rss']
+            rssurl = urlsplit(rssurl)
+            if rssurl.netloc == 'www.batoto.net' and rssurl.path == '/myfollows_rss':
+                if rssurl.query and rssurl.query.find('l=') == -1:
+                    log.debug('Adding language requirements to rss url')
+                    query = rssurl.query + '&l=' + self.language #'%3B'.join(self.language)
+                    rssurl = urlunsplit((rssurl.scheme, rssurl.netloc, rssurl.path, query, rssurl.fragment))
+                    log.debug(rssurl)
+                    if isinstance(task.config['rss'], dict):
+                        task.config['rss']['url'] = rssurl
+                    elif isinstance(task.config['rss'], basestring):
+                        task.config['rss'] = rssurl
 
         self.batotoloaded = True
         self.pages = {}
@@ -115,7 +127,6 @@ class Batoto(object):
     def on_task_exit(self, task, config):
         self.batotoloaded = False   #lets urlhandler tell if plugin is loaded for current task.
         del self.language
-        del self.languagecookie
         self.pages = {}
 
     @plugin.priority(1)
@@ -132,10 +143,10 @@ class Batoto(object):
 
         for entry in task.accepted:
             url = entry.get('url')
-            if not urlparse(url)[1].endswith('batoto.net'):
+            if not urlsplit(url)[1].endswith('batoto.net'):
                 log.warning('%s URL is not a batoto URL, ignoring.' % entry.get('title'))
                 continue
-            if urlparse(url)[1].startswith('img'): continue    #image
+            if urlsplit(url)[1].startswith('img'): continue    #image
             try:
                 r = requests.get(url)
                 if r.status_code != 200: raise plugin.PluginError(str(r.status_code) + ' error getting ' + str(r.url))
@@ -145,7 +156,7 @@ class Batoto(object):
                 continue
 
             #Are we on a chapter page?
-            if not urlparse(r.url)[2].startswith('/read/'):
+            if not urlsplit(r.url)[2].startswith('/read/'):
                 entry.fail(unicode('URL is not a chapter page.'))
                 continue
 
@@ -292,7 +303,7 @@ class Batoto(object):
     def url_rewritable(self, task, entry):
         #Test batoto is loaded for this task.
         if not self.batotoloaded: return False
-        url = urlparse(entry.get('url'))
+        url = urlsplit(entry.get('url'))
         return url[1].endswith('batoto.net') and url[2].startswith('/comic/_/comics/')
 
     def url_rewrite(self, task, entry):
@@ -311,8 +322,8 @@ class Batoto(object):
         else:
             if not task.options.nocache: log.verbose('No cache exists for %s. Getting online.' % entry['url'])
             try:
-                r = requests.get(entry['url'], cookies = self.languagecookie)
-                if not urlparse(r.url)[2].startswith('/comic/_/comics/'):
+                r = requests.get(entry['url'], cookies = {'lang_option': self.language})
+                if not urlsplit(r.url)[2].startswith('/comic/_/comics/'):
                     raise plugin.PluginError('Error getting page %s: Series may not exist at url.' % entry['url'])
             except Exception as e:
                 entry.fail(unicode('Error finding chapters. ') + unicode(e))
@@ -377,7 +388,7 @@ class Batoto(object):
         if not targetchapter:
             exitstring = 'Unable to find chapter %s' % entry.get('title')
             if self.language:
-                exitstring = exitstring + ' in %s' % self.language
+                exitstring = exitstring + ' in specified languages'
                 entry.reject(unicode(exitstring))
             else:
                 #Since we're not checking languages, not finding a chapter here is likely an issue.
