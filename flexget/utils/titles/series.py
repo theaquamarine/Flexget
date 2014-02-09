@@ -2,6 +2,7 @@ from __future__ import unicode_literals, division, absolute_import
 import logging
 import re
 from datetime import datetime, timedelta
+from itertools import chain
 
 from dateutil.parser import parse as parsedate
 
@@ -367,6 +368,7 @@ class SeriesParser(TitleParser):
         if self.identified_by in ['sequence', 'auto'] and not self.valid:
             for sequence_re in self.sequence_regexps:
                 match = re.search(sequence_re, data_stripped)
+                log.debug('Match: %s' % match)
                 if match:
                     # strict_name
                     if self.strict_name:
@@ -477,13 +479,13 @@ class SeriesParser(TitleParser):
         """
 
         # search for season and episode number
-        for ep_re in self.ep_regexps:
+        for ep_re in chain(self.ep_regexps, self.sequence_regexps):
             match = re.search(ep_re, data)
 
             if match:
                 log.debug('found episode number with regexp %s (%s)', ep_re.pattern, match.groups())
                 matches = match.groups()
-                if len(matches) >= 2:
+                if len(matches) >= 2 and matches[1] is not None:
                     season = matches[0]
                     episode = matches[1]
                 elif self.allow_seasonless:
