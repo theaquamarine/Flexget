@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timedelta
 
 from dateutil.parser import parse as parsedate
+from itertools import chain
 
 from flexget.utils.titles.parser import TitleParser, ParseWarning
 from flexget.utils import qualities
@@ -311,6 +312,7 @@ class SeriesParser(TitleParser):
                     self.episodes = (ep_match['end_episode'] - ep_match['episode']) + 1
                 else:
                     self.episodes = 1
+                self.seasonless = ep_match['seasonless']
                 self.id_type = 'ep'
                 self.valid = True
                 if not self.special or not self.prefer_specials: return
@@ -477,19 +479,23 @@ class SeriesParser(TitleParser):
         """
 
         # search for season and episode number
-        for ep_re in self.ep_regexps:
+        # for ep_re in self.ep_regexps:
+        for ep_re in chain(self.ep_regexps, self.sequence_regexps):
             match = re.search(ep_re, data)
 
             if match:
                 log.debug('found episode number with regexp %s (%s)', ep_re.pattern, match.groups())
                 matches = match.groups()
-                if len(matches) >= 2:
+                #TODO: This is probably not ideal
+                if len(matches) >= 2 and matches[1] is not None:
                     season = matches[0]
                     episode = matches[1]
+                    seasonless = False
                 elif self.allow_seasonless:
                     # assume season 1 if the season was not specified
                     season = 1
                     episode = matches[0]
+                    seasonless = True
                 else:
                     # Return False if we are not allowing seasonless matches and one is found
                     return False
@@ -519,7 +525,8 @@ class SeriesParser(TitleParser):
                 return {'season': season,
                         'episode': episode,
                         'end_episode': end_episode,
-                        'match': match}
+                        'match': match,
+                        'seasonless': seasonless}
         return False
 
     def roman_to_int(self, roman):

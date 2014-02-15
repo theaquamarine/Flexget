@@ -23,7 +23,7 @@ from flexget.utils.sqlalchemy_utils import (table_columns, table_exists, drop_ta
 from flexget.utils.tools import merge_dict_from_to, parse_timedelta
 from flexget.utils.database import quality_property
 
-SCHEMA_VER = 11
+SCHEMA_VER = 12
 
 log = logging.getLogger('series')
 Base = db_schema.versioned_base('series', SCHEMA_VER)
@@ -140,6 +140,9 @@ def upgrade(ver, session):
         log.verbose('Repairing series_tasks table data')
         session.execute(delete(series_tasks, ~series_tasks.c.series_id.in_(select([series_table.c.id]))))
         ver = 11
+    if ver == 11:
+        table_add_column('episode_releases', 'seasonless', Boolean, session)
+        ver = 12
 
     return ver
 
@@ -352,6 +355,7 @@ class Release(Base):
     proper_count = Column(Integer, default=0)
     title = Column(Unicode)
     first_seen = Column(DateTime)
+    seasonless = Column(Boolean, default=False)
 
     def __init__(self):
         self.first_seen = datetime.now()
@@ -364,8 +368,8 @@ class Release(Base):
         return self.proper_count > 0
 
     def __unicode__(self):
-        return '<Release(id=%s,quality=%s,downloaded=%s,proper_count=%s,title=%s)>' % \
-            (self.id, self.quality, self.downloaded, self.proper_count, self.title)
+        return '<Release(id=%s,quality=%s,downloaded=%s,proper_count=%s,title=%s,seasonless=%s)>' % \
+            (self.id, self.quality, self.downloaded, self.proper_count, self.title, self.seasonless)
 
     def __repr__(self):
         return unicode(self).encode('ascii', 'replace')
@@ -548,6 +552,7 @@ def store_parser(session, parser, series=None):
             release.quality = parser.quality
             release.proper_count = parser.proper_count
             release.title = parser.data
+            release.seasonless = parser.seasonless
             episode.releases.append(release)  # pylint:disable=E1103
             log.debug('-> added %s' % release)
         releases.append(release)

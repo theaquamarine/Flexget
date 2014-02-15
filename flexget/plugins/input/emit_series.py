@@ -36,16 +36,24 @@ class EmitSeries(object):
         ]
     }
 
-    def ep_identifiers(self, season, episode):
-        return ['S%02dE%02d' % (season, episode),
-                '%dx%02d' % (season, episode)]
+    seasonless = False
+    seasonless = True
+
+    def ep_identifiers(self, season, episode, seasonless=False):
+        if seasonless:
+            return ['%d' % episode,
+                    'S%02dE%02d' % (season, episode),
+                    '%dx%02d' % (season, episode)]
+        else:
+            return ['S%02dE%02d' % (season, episode),
+                    '%dx%02d' % (season, episode)]
 
     def sequence_identifiers(self, episode):
         return ['%d' % episode]
 
-    def search_entry(self, series, season, episode, task, rerun=True):
+    def search_entry(self, series, season, episode, task, rerun=True, seasonless=False):
         if series.identified_by == 'ep':
-            search_strings = ['%s %s' % (series.name, id) for id in self.ep_identifiers(season, episode)]
+            search_strings = ['%s %s' % (series.name, id) for id in self.ep_identifiers(season, episode, seasonless=seasonless)]
             series_id = 'S%02dE%02d' % (season, episode)
         else:
             search_strings = ['%s %s' % (series.name, id) for id in self.sequence_identifiers(episode)]
@@ -69,6 +77,7 @@ class EmitSeries(object):
         if not task.is_rerun:
             self.try_next_season = {}
         entries = []
+        seasonless = False
         for seriestask in task.session.query(SeriesTask).filter(SeriesTask.name == task.name).all():
             series = seriestask.series
             if not series:
@@ -99,6 +108,10 @@ class EmitSeries(object):
                     latest_ep_this_season = episodes_this_season.order_by(desc(Episode.number)).first()
                     downloaded_this_season = (episodes_this_season.join(Episode.releases).
                                               filter(Release.downloaded == True).all())
+                    if series.identified_by == 'ep':
+                        # TODO: downloaded_this_season or episodes_this_season.all()?
+                        if any(r.seasonless for e in downloaded_this_season for r in e.downloaded_releases):
+                            seasonless = True
                     # Calculate the episodes we still need to get from this season
                     if series.begin and series.begin.season == latest.season:
                         start_at_ep = max(start_at_ep, series.begin.number)
@@ -108,10 +121,10 @@ class EmitSeries(object):
                             eps_to_get.remove(ep.number)
                         except ValueError:
                             pass
-                    entries.extend(self.search_entry(series, latest.season, x, task, rerun=False) for x in eps_to_get)
+                    entries.extend(self.search_entry(series, latest.season, x, task, rerun=False, seasonless=seasonless) for x in eps_to_get)
                     # If we have already downloaded the latest known episode, try the next episode
                     if latest_ep_this_season.downloaded_releases:
-                        entries.append(self.search_entry(series, latest.season, latest_ep_this_season.number + 1, task))
+                        entries.append(self.search_entry(series, latest.season, latest_ep_this_season.number + 1, task, seasonless=seasonless))
             else:
                 if config.get('from_start'):
                     season = 1 if series.identified_by == 'ep' else 0
