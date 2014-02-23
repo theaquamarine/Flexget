@@ -99,12 +99,8 @@ class Batoto(object):
             self.language = None
         log.debug('Language set to %s', self.language)
 
-        #Saves us doing language filtering on series pages.
-        if self.language:
-            self.language = '%3B'.join(self.language) #urlencoded semicolon
-
         #if we're supposed to be filtering by language, ensure rss is filtering if it can be.
-        if task.config.get('rss'):
+        if self.language and task.config.get('rss'):
             if isinstance(task.config['rss'], dict):
                 rssurl = task.config['rss'].get('url')
             elif isinstance(task.config['rss'], basestring):
@@ -113,7 +109,7 @@ class Batoto(object):
             if rssurl.netloc == 'www.batoto.net' and rssurl.path == '/myfollows_rss':
                 if rssurl.query and rssurl.query.find('l=') == -1:
                     log.debug('Adding language requirements to rss url')
-                    query = rssurl.query + '&l=' + self.language #'%3B'.join(self.language)
+                    query = rssurl.query + '&l=' + '%3B'.join(self.language)
                     rssurl = urlunsplit((rssurl.scheme, rssurl.netloc, rssurl.path, query, rssurl.fragment))
                     log.debug(rssurl)
                     if isinstance(task.config['rss'], dict):
@@ -315,6 +311,12 @@ class Batoto(object):
         recent upload.
         """
 
+        # Reject if none of the desired languages are in the entry title.
+        if self.language and not any(lang in entry['title'] for lang in self.language):
+            entry.reject('Entry not in a desired language.')
+            return
+
+        #Grab the series page (filtered by language), soup it and grab details for all chapters.
         log.verbose('URL looks like a series page. Attempting to get %s' % entry.get('title'))
         if entry['url'] in self.cache and not task.options.nocache:
             log.verbose('Using cached page for %s' % entry['url'])
@@ -322,11 +324,16 @@ class Batoto(object):
         else:
             if not task.options.nocache: log.verbose('No cache exists for %s. Getting online.' % entry['url'])
             try:
-                r = requests.get(entry['url'], cookies = {'lang_option': self.language})
+                if self.language:
+                    cookie = {'lang_option': '%3B'.join(self.language)}
+                else:
+                    cookie = None
+                r = requests.get(entry['url'], cookies = cookie)
                 if not urlsplit(r.url)[2].startswith('/comic/_/comics/'):
                     raise plugin.PluginError('Error getting page %s: Series may not exist at url.' % entry['url'])
             except Exception as e:
                 entry.fail(unicode('Error finding chapters. ') + unicode(e))
+                log.debug('Error: %s' % e)
                 raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
             self.cache[entry['url']] = r.text
             text = r.text
@@ -345,6 +352,8 @@ class Batoto(object):
         except Exception as e:
             entry.fail(unicode('Error finding chapters. ') + unicode(e))
             raise plugin.PluginWarning('Error encountered while processing %s' % entry.get('title'))
+
+        #Try to get a SeriesParser to help us identify the right chapter. Copy series' one if exists, make one if not.
         temp_parser = False
         if entry.get('series_parser'): parser = copy(entry['series_parser'])
         else:
@@ -361,6 +370,8 @@ class Batoto(object):
             log.debug('Parser = %s' % parser)
         if parser: log.debug('Looking for id: %s' % parser.pack_identifier)
         else: log.warning('Unable to create a parser. Getting most recent chapter instead.')
+
+        #Try to find a chapter matching entry['title']. Default to most recent if >1 match or no parser.
         h = HTMLParser.HTMLParser()
         targetchapter = None
         targettime = None
@@ -384,16 +395,13 @@ class Batoto(object):
             if targettime is None or chaptertime > targettime:
                 targetchapter = row
                 targettime = chaptertime
+
+        #Clean up & return
         if temp_parser: del entry['series_parser']
         if not targetchapter:
             exitstring = 'Unable to find chapter %s' % entry.get('title')
-            if self.language:
-                exitstring = exitstring + ' in specified languages'
-                entry.reject(unicode(exitstring))
-            else:
-                #Since we're not checking languages, not finding a chapter here is likely an issue.
-                entry.fail(unicode(exitstring))
-                raise plugin.PluginWarning(exitstring)
+            entry.fail(unicode(exitstring))
+            raise plugin.PluginWarning(exitstring)
             log.debug(self.updatewarning)
         else:
             try:
