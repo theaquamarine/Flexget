@@ -114,7 +114,7 @@ class TestBatotoRewriter(FlexGetBase):
 
           match_multiple:
             mock:
-              - {title: 'D-FRAG Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/d-frag-r444'}
+              - {title: 'D-FRAG - English - Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/d-frag-r444'}
             accept_all: yes
             batoto:
               language: English
@@ -122,7 +122,7 @@ class TestBatotoRewriter(FlexGetBase):
 
           match_lang:
             mock:
-              - {title: 'Nichijou Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/nichijou-r188'}
+              - {title: 'Nichijou - English - Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/nichijou-r188'}
             series:
               - nichijou
             batoto:
@@ -131,7 +131,7 @@ class TestBatotoRewriter(FlexGetBase):
 
           garbage_series:
             mock:
-              - {title: 'Nichijou Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/ddddddddddddddddddddddddddd'}
+              - {title: 'Nichijou - English - Vol.1 Ch.1', url: 'http://www.batoto.net/comic/_/comics/ddddddddddddddddddddddddddd'}
             disable_builtins: [retry_failed]
             batoto: '~'
             accept_all: yes
@@ -171,7 +171,7 @@ class TestBatotoRewriter(FlexGetBase):
         #Test chapter matching when multiple chapters in target language match.
         #Expected: most recent upload is selected.
         self.execute_task('match_multiple', options=dict(disable_phases=['download', 'output']))
-        entry = self.task.find_entry(title='D-FRAG Vol.1 Ch.1')
+        entry = self.task.find_entry(title='D-FRAG - English - Vol.1 Ch.1')
         #This will break with time. Change it to a long-dead series.
         targeturl = 'http://www.batoto.net/read/_/97581/d-frag_v1_ch1_by_re-frag-manga'
         avoidurl = 'http://www.batoto.net/read/_/6423/d-frag_v1_ch1_by_because-i-wanna'
@@ -183,7 +183,7 @@ class TestBatotoRewriter(FlexGetBase):
         #Test chapter matching when multiple chapters in different target languages match.
         #Expected: language priority handles, picks highest-priority language.
         self.execute_task('match_lang', options=dict(disable_phases=['download', 'output']))
-        entry = self.task.find_entry(title='Nichijou Vol.1 Ch.1')
+        entry = self.task.find_entry(title='Nichijou - English - Vol.1 Ch.1')
         targeturl = 'http://www.batoto.net/read/_/174891/nichijou_v1_ch1_by_kanjiku'
         assert entry['url'] == targeturl, ('Entry url is %s and should be %s' % (entry['url'], targeturl))
 
@@ -194,7 +194,7 @@ class TestBatotoRewriter(FlexGetBase):
         self.execute_task('garbage_series', options=dict(disable_phases=['download', 'output']))
         # assert_raises(TaskAbort, self.execute_task, 'garbage_series',
         #     options=dict(disable_phases=['download', 'output']))
-        assert self.task.find_entry('failed', title='Nichijou Vol.1 Ch.1'), 'Entry should have failed.'
+        assert self.task.find_entry('failed', title='Nichijou - English - Vol.1 Ch.1'), 'Entry should have failed.'
 
 class TestBatotoSetup(FlexGetBase):
 
@@ -312,7 +312,6 @@ class TestBatotoSetup(FlexGetBase):
         self.execute_task('language_string', options=dict(disable_phases=['download', 'output', 'exit']))
         batoto = get_plugin_by_name('batoto')
         expectedlanguages = ['English', 'French']
-        expectedlanguages = '%3B'.join(expectedlanguages)
         assert batoto.instance.language == expectedlanguages, ('Language should be set to %s but is %s' %
                                                                 (expectedlanguages, batoto.instance.language))
 
