@@ -5,10 +5,10 @@ from os.path import basename, expanduser, splitext
 from urlparse import urlsplit, urlunsplit
 from datetime import datetime, timedelta
 from copy import copy
-import requests
 from bs4 import BeautifulSoup
 from flexget import plugin
 from flexget.event import event
+from flexget.utils import requests
 from flexget.utils.template import RenderError
 from flexget.utils.titles import ID_TYPES, SeriesParser
 from flexget.utils.tools import TimedDict
@@ -116,6 +116,9 @@ class Batoto(object):
                         task.config['rss']['url'] = rssurl
                     elif isinstance(task.config['rss'], basestring):
                         task.config['rss'] = rssurl
+
+        #Add a delay between requests to Batoto
+        task.requests.set_domain_delay('batoto.net', timedelta(seconds = 0.5))
 
         self.batotoloaded = True
         self.pages = {}
