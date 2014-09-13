@@ -106,7 +106,7 @@ class Batoto(object):
             elif isinstance(task.config['rss'], basestring):
                 rssurl = task.config['rss']
             rssurl = urlsplit(rssurl)
-            if rssurl.netloc == 'www.batoto.net' and rssurl.path == '/myfollows_rss':
+            if (rssurl.netloc == 'www.batoto.net' or rssurl.netloc == 'www.bato.to') and rssurl.path == '/myfollows_rss':
                 if rssurl.query and rssurl.query.find('l=') == -1:
                     log.debug('Adding language requirements to rss url')
                     query = rssurl.query + '&l=' + '%3B'.join(self.language)
@@ -119,6 +119,7 @@ class Batoto(object):
 
         #Add a delay between requests to Batoto
         task.requests.set_domain_delay('batoto.net', timedelta(seconds = 0.5))
+        task.requests.set_domain_delay('bato.to', timedelta(seconds = 0.5))
 
         self.batotoloaded = True
         self.pages = {}
@@ -142,7 +143,7 @@ class Batoto(object):
 
         for entry in task.accepted:
             url = entry.get('url')
-            if not urlsplit(url)[1].endswith('batoto.net'):
+            if not (urlsplit(url)[1].endswith('batoto.net') or urlsplit(url)[1].endswith('bato.to')):
                 log.warning('%s URL is not a batoto URL, ignoring.' % entry.get('title'))
                 continue
             if urlsplit(url)[1].startswith('img'): continue    #image
@@ -303,7 +304,7 @@ class Batoto(object):
         #Test batoto is loaded for this task.
         if not self.batotoloaded: return False
         url = urlsplit(entry.get('url'))
-        return url[1].endswith('batoto.net') and url[2].startswith('/comic/_/comics/')
+        return (url[1].endswith('batoto.net') or url[1].endswith('bato.to')) and url[2].startswith('/comic/_/comics/')
 
     def url_rewrite(self, task, entry):
         """
